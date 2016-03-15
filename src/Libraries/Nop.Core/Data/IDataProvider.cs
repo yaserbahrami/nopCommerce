@@ -38,5 +38,13 @@ namespace Nop.Core.Data
         /// </summary>
         /// <returns>Parameter</returns>
         DbParameter GetParameter();
+
+        /// <summary>
+        /// Maximum length of the data for HASHBYTES functions
+        /// 
+        /// 0 - if HASHBYTES function not support
+        /// </summary>
+        /// <returns></returns>
+        int SupportedLengthOfBinaryHash();
     }
 }
