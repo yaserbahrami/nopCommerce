@@ -94,9 +94,63 @@
                 </div>
             </div>
         </div>
-        <div class="post-body">
-            @Html.Raw(Model.FormattedText)
-            @Html.Hidden("Id", Model.Id)
+        <div class="post-body">          
+            <div class="post-cell">
+                <div class="post-text">
+                    @Html.Raw(Model.FormattedText)
+                    @Html.Hidden("Id", Model.Id)
+                </div>
+            </div>
+            @if (Model.AllowPostVoting)
+            {
+                <div class="vote-cell">
+                    <script type="text/javascript">
+                        $(document).ready(function () {
+                            var post = '#post-vote-' + @Model.Id;
+                            $(post + ' img.vote').click(function () {
+                                var postData = {
+                                    postId: @Model.Id,
+                                    IsUp: $(this).hasClass('up')
+                                };
+                                addAntiForgeryToken(postData);
+                                $.ajax({
+                                    cache: false,
+                                    type: "POST",
+                                    url: '@Url.Action("PostVote", "Boards")',
+                                    data: postData,
+                                    success: function (data) {
+                                        if (data.Error) {
+                                            alert(data.Error);
+                                        }
+                                        else {
+                                            $(post + ' div.vote-count-post').html(data.VoteCount);
+                                            $(post + ' img.up').removeClass('selected');
+                                            $(post + ' img.down').removeClass('selected');
+                                            if (data.IsUp) {
+                                                $(post + ' img.up').addClass('selected');
+                                            }
+                                            if (data.IsUp == false) {
+                                                $(post + ' img.down').addClass('selected');
+                                            }
+                                        }
+                                    },
+                                    error: function (xhr, ajaxOptions, thrownError) {
+                                        alert('Failed to vote');
+                                    }
+                                });
+                            });
+                        });
+                    </script>
+
+                    <div class="post-vote" id="@String.Format("post-vote-{0}", Model.Id)">
+                        <img class="vote up @if (Model.VoteIsUp.HasValue && (bool)Model.VoteIsUp) { <text>selected</text> }"
+                                alt="This post/answer is useful" title="This post/answer is useful">
+                        <div class="vote-count-post"> @Model.VoteCount </div>
+                        <img class="vote down @if (Model.VoteIsUp.HasValue && (bool)!Model.VoteIsUp) { <text>selected</text> }"
+                                alt="This post/answer is not useful" title="This post/answer is not useful">
+                    </div>
+                </div>
+            }
         </div>
         @if (Model.SignaturesEnabled & !String.IsNullOrEmpty(Model.FormattedSignature))
         {

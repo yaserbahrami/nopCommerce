@@ -4542,6 +4542,38 @@ label, label + * {
     font-style: italic;
 }
 
+.topic-post .post-cell {
+	width: 680px;
+    vertical-align: top;
+}
+.topic-post .post-cell .post-text{
+	max-width: 835px;
+    word-wrap: break-word;
+}
+.topic-post .vote-cell {
+	width: 50px;
+    vertical-align: top;
+    text-align: center;
+}
+.topic-post .post-vote img.vote {
+	cursor: pointer;
+}
+.topic-post .post-vote img.up{
+    content: url('../images/vote-up.png');
+}
+.topic-post .post-vote img.vote.up.selected{
+    content: url('../images/vote-up-selected.png');
+}
+.topic-post .post-vote img.down{
+    content: url('../images/vote-down.png');
+}
+.topic-post .post-vote img.vote.down.selected{
+    content: url('../images/vote-down-selected.png');
+}
+.topic-post .vote-count-post {
+    display: block;
+    font-size: 160%;
+}
 /* forum edit & send message */
 
 .forum-edit-page .page-title,
