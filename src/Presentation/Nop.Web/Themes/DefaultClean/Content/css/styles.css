@@ -4545,6 +4545,7 @@ label, label + * {
 .topic-post .post-cell {
 	width: 680px;
     vertical-align: top;
+    max-width: 100%;
 }
 .topic-post .post-cell .post-text{
 	max-width: 835px;
@@ -4554,6 +4555,7 @@ label, label + * {
 	width: 50px;
     vertical-align: top;
     text-align: center;
+    margin: 10px auto 0;
 }
 .topic-post .post-vote img.vote {
 	cursor: pointer;
@@ -5225,6 +5227,23 @@ pre {
 	margin: 1px;
 }
 
+.topic-post .post-body:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.topic-post .post-cell {
+    max-width: 85%;
+    float: left;
+    text-align: left;
+}
+
+.topic-post .vote-cell {
+    margin: 0;
+    float: right;
+}
+
 }
 
 
@@ -5762,7 +5781,7 @@ pre {
 	text-align: center;
 }
 .topic-post .post-body {
-	padding: 20px;
+	padding: 20px 15px 20px 20px;
 }
 
 .ui-tabs-nav {
