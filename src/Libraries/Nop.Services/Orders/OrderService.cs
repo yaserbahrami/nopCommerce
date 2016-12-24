@@ -6,8 +6,6 @@ using Nop.Core.Data;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Orders;
-using Nop.Core.Domain.Payments;
-using Nop.Core.Domain.Shipping;
 using Nop.Services.Events;
 
 namespace Nop.Services.Orders
@@ -88,7 +86,7 @@ namespace Nop.Services.Orders
                 return new List<Order>();
 
             var query = from o in _orderRepository.Table
-                        where orderIds.Contains(o.Id)
+                        where orderIds.Contains(o.Id) && !o.Deleted
                         select o;
             var orders = query.ToList();
             //sort by passed identifiers
@@ -130,6 +128,9 @@ namespace Nop.Services.Orders
 
             order.Deleted = true;
             UpdateOrder(order);
+
+            //event notification
+            _eventPublisher.EntityDeleted(order);
         }
 
         /// <summary>
@@ -151,7 +152,6 @@ namespace Nop.Services.Orders
         /// <param name="billingEmail">Billing email. Leave empty to load all records.</param>
         /// <param name="billingLastName">Billing last name. Leave empty to load all records.</param>
         /// <param name="orderNotes">Search in order notes. Leave empty to load all records.</param>
-        /// <param name="orderGuid">Search by order GUID (Global unique identifier) or part of GUID. Leave empty to load all orders.</param>
         /// <param name="pageIndex">Page index</param>
         /// <param name="pageSize">Page size</param>
         /// <returns>Orders</returns>
@@ -162,8 +162,7 @@ namespace Nop.Services.Orders
             DateTime? createdFromUtc = null, DateTime? createdToUtc = null,
             List<int> osIds = null, List<int> psIds = null, List<int> ssIds = null,
             string billingEmail = null, string billingLastName = "",
-            string orderNotes = null, string orderGuid = null,
-            int pageIndex = 0, int pageSize = int.MaxValue)
+            string orderNotes = null, int pageIndex = 0, int pageSize = int.MaxValue)
         {
             var query = _orderRepository.Table;
             if (storeId > 0)
@@ -211,11 +210,11 @@ namespace Nop.Services.Orders
                 query = query.Where(o => createdFromUtc.Value <= o.CreatedOnUtc);
             if (createdToUtc.HasValue)
                 query = query.Where(o => createdToUtc.Value >= o.CreatedOnUtc);
-            if (osIds != null && osIds.Count > 0)
+            if (osIds != null && osIds.Any())
                 query = query.Where(o => osIds.Contains(o.OrderStatusId));
-            if (psIds != null && psIds.Count > 0)
+            if (psIds != null && psIds.Any())
                 query = query.Where(o => psIds.Contains(o.PaymentStatusId));
-            if (ssIds != null && ssIds.Count > 0)
+            if (ssIds != null && ssIds.Any())
                 query = query.Where(o => ssIds.Contains(o.ShippingStatusId));
             if (!String.IsNullOrEmpty(billingEmail))
                 query = query.Where(o => o.BillingAddress != null && !String.IsNullOrEmpty(o.BillingAddress.Email) && o.BillingAddress.Email.Contains(billingEmail));
@@ -226,16 +225,6 @@ namespace Nop.Services.Orders
             query = query.Where(o => !o.Deleted);
             query = query.OrderByDescending(o => o.CreatedOnUtc);
 
-            
-           
-            if (!String.IsNullOrEmpty(orderGuid))
-            {
-                //filter by GUID. Filter in BLL because EF doesn't support casting of GUID to string
-                var orders = query.ToList();
-                orders = orders.FindAll(o => o.OrderGuid.ToString().ToLowerInvariant().Contains(orderGuid.ToLowerInvariant()));
-                return new PagedList<Order>(orders, pageIndex, pageSize);
-            }
-            
             //database layer paging
             return new PagedList<Order>(query, pageIndex, pageSize);
         }
@@ -410,6 +399,9 @@ namespace Nop.Services.Orders
 
             recurringPayment.Deleted = true;
             UpdateRecurringPayment(recurringPayment);
+
+            //event notification
+            _eventPublisher.EntityDeleted(recurringPayment);
         }
 
         /// <summary>

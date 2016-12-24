@@ -1,9 +1,13 @@
-﻿@{
+﻿@using Nop.Services.Stores
+@{
     var defaultGridPageSize = EngineContext.Current.Resolve<Nop.Core.Domain.Common.AdminAreaSettings>().DefaultGridPageSize;
     var gridPageSizes = EngineContext.Current.Resolve<Nop.Core.Domain.Common.AdminAreaSettings>().GridPageSizes;
+    var stores = EngineContext.Current.Resolve<IStoreService>().GetAllStores();
 
     //page title
     ViewBag.Title = T("Admin.CurrentCarts").Text;
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Current shopping carts");
 }
 
 @Html.AntiForgeryToken()
@@ -15,6 +19,7 @@
         &nbsp;
     </div>
 </div>
+
 <div class="content">
     <div class="form-horizontal">
         <div class="panel-group">
@@ -111,7 +116,7 @@
                                         field: "ProductName",
                                         title: "@T("Admin.CurrentCarts.Product")",
                                         template: '<a href="@Url.Content("~/Admin/Product/Edit/")#=ProductId#">#:ProductName#</a>' +
-                                            '# if(AttributeInfo && AttributeInfo.length > 0) {# <br />#=AttributeInfo# #} #',
+                                            '# if(AttributeInfo && AttributeInfo.length > 0) {# <div>#=AttributeInfo#</div> #} #',
                                         width: 400
                                     },{
                                         field: "Quantity",
@@ -127,6 +132,7 @@
                                         width: 150
                                     },{
                                         field: "Store",
+                                        hidden: @(stores.Count > 1 ? "false" : "true"),
                                         title: "@T("Admin.CurrentCarts.Store")",
                                         width: 150
                                     },{

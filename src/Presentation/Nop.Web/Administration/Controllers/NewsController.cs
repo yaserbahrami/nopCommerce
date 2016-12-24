@@ -6,8 +6,10 @@ using Nop.Admin.Extensions;
 using Nop.Admin.Models.News;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.News;
+using Nop.Services.Events;
 using Nop.Services.Helpers;
 using Nop.Services.Localization;
+using Nop.Services.Logging;
 using Nop.Services.News;
 using Nop.Services.Security;
 using Nop.Services.Seo;
@@ -26,38 +28,61 @@ namespace Nop.Admin.Controllers
         private readonly INewsService _newsService;
         private readonly ILanguageService _languageService;
         private readonly IDateTimeHelper _dateTimeHelper;
+        private readonly IEventPublisher _eventPublisher;
         private readonly ILocalizationService _localizationService;
         private readonly IPermissionService _permissionService;
         private readonly IUrlRecordService _urlRecordService;
         private readonly IStoreService _storeService;
         private readonly IStoreMappingService _storeMappingService;
-        
-		#endregion
+        private readonly ICustomerActivityService _customerActivityService;
 
-		#region Constructors
+        #endregion
+
+        #region Ctor
 
         public NewsController(INewsService newsService, 
             ILanguageService languageService,
             IDateTimeHelper dateTimeHelper,
+            IEventPublisher eventPublisher,
             ILocalizationService localizationService,
             IPermissionService permissionService,
             IUrlRecordService urlRecordService,
             IStoreService storeService, 
-            IStoreMappingService storeMappingService)
+            IStoreMappingService storeMappingService,
+            ICustomerActivityService customerActivityService)
         {
             this._newsService = newsService;
             this._languageService = languageService;
             this._dateTimeHelper = dateTimeHelper;
+            this._eventPublisher = eventPublisher;
             this._localizationService = localizationService;
             this._permissionService = permissionService;
             this._urlRecordService = urlRecordService;
             this._storeService = storeService;
             this._storeMappingService = storeMappingService;
-		}
+            this._customerActivityService = customerActivityService;
+        }
 
-		#endregion 
+        #endregion
 
         #region Utilities
+
+        [NonAction]
+        protected virtual void PrepareLanguagesModel(NewsItemModel model)
+        {
+            if (model == null)
+                throw new ArgumentNullException("model");
+
+            var languages = _languageService.GetAllLanguages(true);
+            foreach (var language in languages)
+            {
+                model.AvailableLanguages.Add(new SelectListItem
+                {
+                    Text = language.Name,
+                    Value = language.Id.ToString()
+                });
+            }
+        }
 
         [NonAction]
         protected virtual void PrepareStoresMappingModel(NewsItemModel model, NewsItem newsItem, bool excludeProperties)
@@ -65,27 +90,31 @@ namespace Nop.Admin.Controllers
             if (model == null)
                 throw new ArgumentNullException("model");
 
-            model.AvailableStores = _storeService
-                .GetAllStores()
-                .Select(s => s.ToModel())
-                .ToList();
-            if (!excludeProperties)
+            if (!excludeProperties && newsItem != null)
+                model.SelectedStoreIds = _storeMappingService.GetStoresIdsWithAccess(newsItem).ToList();
+
+            var allStores = _storeService.GetAllStores();
+            foreach (var store in allStores)
             {
-                if (newsItem != null)
+                model.AvailableStores.Add(new SelectListItem
                 {
-                    model.SelectedStoreIds = _storeMappingService.GetStoresIdsWithAccess(newsItem);
-                }
+                    Text = store.Name,
+                    Value = store.Id.ToString(),
+                    Selected = model.SelectedStoreIds.Contains(store.Id)
+                });
             }
         }
 
         [NonAction]
         protected virtual void SaveStoreMappings(NewsItem newsItem, NewsItemModel model)
         {
+            newsItem.LimitedToStores = model.SelectedStoreIds.Any();
+
             var existingStoreMappings = _storeMappingService.GetStoreMappings(newsItem);
             var allStores = _storeService.GetAllStores();
             foreach (var store in allStores)
             {
-                if (model.SelectedStoreIds != null && model.SelectedStoreIds.Contains(store.Id))
+                if (model.SelectedStoreIds.Contains(store.Id))
                 {
                     //new store
                     if (existingStoreMappings.Count(sm => sm.StoreId == store.Id) == 0)
@@ -100,8 +129,7 @@ namespace Nop.Admin.Controllers
                 }
             }
         }
-
-
+        
         #endregion
 
         #region News items
@@ -137,11 +165,7 @@ namespace Nop.Admin.Controllers
                 Data = news.Select(x =>
                 {
                     var m = x.ToModel();
-                    //little hack here:
-                    //ensure that descriptions are not returned
-                    //otherwise, we can get the following error if entities have too long descriptions:
-                    //"Error during serialization or deserialization using the JSON JavaScriptSerializer. The length of the string exceeds the value set on the maxJsonLength property. "
-                    //also it improves performance
+                    //little performance optimization: ensure that "Full" is not returned
                     m.Full = "";
                     if (x.StartDateUtc.HasValue)
                         m.StartDate = _dateTimeHelper.ConvertToUserTime(x.StartDateUtc.Value, DateTimeKind.Utc);
@@ -149,7 +173,9 @@ namespace Nop.Admin.Controllers
                         m.EndDate = _dateTimeHelper.ConvertToUserTime(x.EndDateUtc.Value, DateTimeKind.Utc);
                     m.CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc);
                     m.LanguageName = x.Language.Name;
-                    m.Comments = x.CommentCount;
+                    m.ApprovedComments = _newsService.GetNewsCommentsCount(x, isApproved: true);
+                    m.NotApprovedComments = _newsService.GetNewsCommentsCount(x, isApproved: false);
+
                     return m;
                 }),
                 Total = news.TotalCount
@@ -163,8 +189,9 @@ namespace Nop.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageNews))
                 return AccessDeniedView();
 
-            ViewBag.AllLanguages = _languageService.GetAllLanguages(true);
             var model = new NewsItemModel();
+            //languages
+            PrepareLanguagesModel(model);
             //Stores
             PrepareStoresMappingModel(model, null, false);
             //default values
@@ -186,7 +213,10 @@ namespace Nop.Admin.Controllers
                 newsItem.EndDateUtc = model.EndDate;
                 newsItem.CreatedOnUtc = DateTime.UtcNow;
                 _newsService.InsertNews(newsItem);
-                
+
+                //activity log
+                _customerActivityService.InsertActivity("AddNewNews", _localizationService.GetResource("ActivityLog.AddNewNews"), newsItem.Id);
+
                 //search engine name
                 var seName = newsItem.ValidateSeName(model.SeName, model.Title, true);
                 _urlRecordService.SaveSlug(newsItem, seName, newsItem.LanguageId);
@@ -208,8 +238,7 @@ namespace Nop.Admin.Controllers
             }
 
             //If we got this far, something failed, redisplay form
-            ViewBag.AllLanguages = _languageService.GetAllLanguages(true);
-            //Stores
+            PrepareLanguagesModel(model);
             PrepareStoresMappingModel(model, null, true);
             return View(model);
         }
@@ -224,10 +253,11 @@ namespace Nop.Admin.Controllers
                 //No news item found with the specified id
                 return RedirectToAction("List");
 
-            ViewBag.AllLanguages = _languageService.GetAllLanguages(true);
             var model = newsItem.ToModel();
             model.StartDate = newsItem.StartDateUtc;
             model.EndDate = newsItem.EndDateUtc;
+            //languages
+            PrepareLanguagesModel(model);
             //Store
             PrepareStoresMappingModel(model, newsItem, false);
             return View(model);
@@ -251,6 +281,9 @@ namespace Nop.Admin.Controllers
                 newsItem.EndDateUtc = model.EndDate;
                 _newsService.UpdateNews(newsItem);
 
+                //activity log
+                _customerActivityService.InsertActivity("EditNews", _localizationService.GetResource("ActivityLog.EditNews"), newsItem.Id);
+
                 //search engine name
                 var seName = newsItem.ValidateSeName(model.SeName, model.Title, true);
                 _urlRecordService.SaveSlug(newsItem, seName, newsItem.LanguageId);
@@ -271,8 +304,7 @@ namespace Nop.Admin.Controllers
             }
 
             //If we got this far, something failed, redisplay form
-            ViewBag.AllLanguages = _languageService.GetAllLanguages(true);
-            //Store
+            PrepareLanguagesModel(model);
             PrepareStoresMappingModel(model, newsItem, true);
             return View(model);
         }
@@ -289,6 +321,9 @@ namespace Nop.Admin.Controllers
                 return RedirectToAction("List");
 
             _newsService.DeleteNews(newsItem);
+
+            //activity log
+            _customerActivityService.InsertActivity("DeleteNews", _localizationService.GetResource("ActivityLog.DeleteNews"), newsItem.Id);
 
             SuccessNotification(_localizationService.GetResource("Admin.ContentManagement.News.NewsItems.Deleted"));
             return RedirectToAction("List");
@@ -313,18 +348,13 @@ namespace Nop.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageNews))
                 return AccessDeniedView();
 
-            IList<NewsComment> comments;
-            if (filterByNewsItemId.HasValue)
-            {
+            IList<NewsComment> comments = filterByNewsItemId.HasValue ?
                 //filter comments by news item
-                var newsItem = _newsService.GetNewsById(filterByNewsItemId.Value);
-                comments = newsItem.NewsComments.OrderBy(bc => bc.CreatedOnUtc).ToList();
-            }
-            else
-            {
+                _newsService.GetNewsById(filterByNewsItemId.Value).NewsComments.OrderBy(bc => bc.CreatedOnUtc).ToList() :
                 //load all news comments
-                comments = _newsService.GetAllComments(0);
-            }
+                _newsService.GetAllComments();
+
+            var storeNames = _storeService.GetAllStores().ToDictionary(store => store.Id, store => store.Name);
 
             var gridModel = new DataSourceResult
             {
@@ -340,12 +370,41 @@ namespace Nop.Admin.Controllers
                     commentModel.CreatedOn = _dateTimeHelper.ConvertToUserTime(newsComment.CreatedOnUtc, DateTimeKind.Utc);
                     commentModel.CommentTitle = newsComment.CommentTitle;
                     commentModel.CommentText = Core.Html.HtmlHelper.FormatText(newsComment.CommentText, false, true, false, false, false, false);
+                    commentModel.IsApproved = newsComment.IsApproved;
+                    commentModel.StoreId = newsComment.StoreId;
+                    commentModel.StoreName = storeNames.ContainsKey(newsComment.StoreId) ? storeNames[newsComment.StoreId] : "Deleted";
+
                     return commentModel;
                 }),
                 Total = comments.Count,
             };
 
             return Json(gridModel);
+        }
+
+        [HttpPost]
+        public ActionResult CommentUpdate(NewsCommentModel model)
+        {
+            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNews))
+                return AccessDeniedView();
+
+            var comment = _newsService.GetNewsCommentById(model.Id);
+            if (comment == null)
+                throw new ArgumentException("No comment found with the specified id");
+
+            var previousIsApproved = comment.IsApproved;
+
+            comment.IsApproved = model.IsApproved;
+            _newsService.UpdateNews(comment.NewsItem);
+
+            //activity log
+            _customerActivityService.InsertActivity("EditNewsComment", _localizationService.GetResource("ActivityLog.EditNewsComment"), model.Id);
+
+            //raise event (only if it wasn't approved before and is approved now)
+            if (!previousIsApproved && comment.IsApproved)
+                _eventPublisher.Publish(new NewsCommentApprovedEvent(comment));
+
+            return new NullJsonResult();
         }
 
         [HttpPost]
@@ -360,9 +419,9 @@ namespace Nop.Admin.Controllers
 
             var newsItem = comment.NewsItem;
             _newsService.DeleteNewsComment(comment);
-            //update totals
-            newsItem.CommentCount = newsItem.NewsComments.Count;
-            _newsService.UpdateNews(newsItem);
+
+            //activity log
+            _customerActivityService.InsertActivity("DeleteNewsComment", _localizationService.GetResource("ActivityLog.DeleteNewsComment"), id);
 
             return new NullJsonResult();
         }
@@ -379,11 +438,11 @@ namespace Nop.Admin.Controllers
                 var news = _newsService.GetNewsByIds(comments.Select(p => p.NewsItemId).Distinct().ToArray());
 
                 _newsService.DeleteNewsComments(comments);
-                //update totals
-                foreach (var newsItem in news)
+
+                //activity log
+                foreach (var newsComment in comments)
                 {
-                    newsItem.CommentCount = newsItem.NewsComments.Count;
-                    _newsService.UpdateNews(newsItem);
+                    _customerActivityService.InsertActivity("DeleteNewsComment", _localizationService.GetResource("ActivityLog.DeleteNewsComment"), newsComment.Id);
                 }
             }
 

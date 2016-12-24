@@ -29,9 +29,14 @@ namespace Nop.Core.Domain.Catalog
         public bool PublishBackProductWhenCancellingOrders { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to display product SKU
+        /// Gets or sets a value indicating whether to display product SKU on the product details page
         /// </summary>
-        public bool ShowProductSku { get; set; }
+        public bool ShowSkuOnProductDetailsPage { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to display product SKU on catalog pages
+        /// </summary>
+        public bool ShowSkuOnCatalogPages { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether to display manufacturer part number of a product
@@ -109,6 +114,11 @@ namespace Nop.Core.Domain.Catalog
         public bool AllowAnonymousUsersToReviewProduct { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether product can be reviewed only by customer who have already ordered it
+        /// </summary>
+        public bool ProductReviewPossibleOnlyAfterPurchasing { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether notification of a store owner about new product reviews is enabled
         /// </summary>
         public bool NotifyStoreOwnerAboutNewProductReviews { get; set; }
@@ -117,6 +127,16 @@ namespace Nop.Core.Domain.Catalog
         /// Gets or sets a value indicating whether the product reviews will be filtered per store
         /// </summary>
         public bool ShowProductReviewsPerStore { get; set; }
+
+        /// <summary>
+        /// Gets or sets a show product reviews tab on account page
+        /// </summary>
+        public bool ShowProductReviewsTabOnAccountPage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the page size for product reviews in account page
+        /// </summary>
+        public int ProductReviewsPageSizeOnAccountPage { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether product 'Email a friend' feature is enabled
@@ -301,8 +321,7 @@ namespace Nop.Core.Domain.Catalog
         /// Gets or sets a value indicating whether to display information about shipping and tax on order details page (used in Germany)
         /// </summary>
         public bool DisplayTaxShippingInfoOrderDetailsPage { get; set; }
-
-
+        
         /// <summary>
         /// Gets or sets the default value to use for Category page size options (for new categories)
         /// </summary>
@@ -329,5 +348,15 @@ namespace Nop.Core.Domain.Catalog
         /// Gets or sets a display order of ProductSortingEnum values 
         /// </summary>
         public Dictionary<int, int> ProductSortingEnumDisplayOrder { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the products need to be exported/imported with their attributes
+        /// </summary>
+        public bool ExportImportProductAttributes { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether need create dropdown list for export
+        /// </summary>
+        public bool ExportImportUseDropdownlistsForAssociatedEntities { get; set; }
     }
 }

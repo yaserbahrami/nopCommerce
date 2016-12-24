@@ -1,8 +1,12 @@
 ﻿@model PermissionMappingModel
+
 @{
     //page title
     ViewBag.Title = T("Admin.Configuration.ACL").Text;
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Access control list");
 }
+
 @using (Html.BeginForm())
 {
     @Html.AntiForgeryToken()
@@ -11,7 +15,10 @@
             @T("Admin.Configuration.ACL")
         </h1>
         <div class="pull-right">
-            <input type="submit" name="save" class="btn btn-default" value="@T("Admin.Common.Save")"/>
+            <button type="submit" name="save" class="btn bg-blue">
+                <i class="fa fa-floppy-o"></i>
+                @T("Admin.Common.Save")
+            </button>
         </div>
     </div>
 
@@ -20,6 +27,9 @@
             <div class="panel-group">
                 <div class="panel panel-default">
                     <div class="panel-body">
+                        <p>
+                            @T("Admin.Configuration.ACL.Description")
+                        </p>
                         @if (Model.AvailablePermissions.Count == 0)
                         {
                             <text>No permissions defined</text>
@@ -52,8 +62,12 @@
                                     @foreach (var cr in Model.AvailableCustomerRoles)
                                     {
                                         <th scope="col">
-                                            <strong>@cr.Name</strong>
-                                            <input type="checkbox" id="selectall-@(cr.Id)"/>
+                                            <div class="checkbox">
+                                                <label>
+                                                    <input type="checkbox" id="selectall-@(cr.Id)" />
+                                                    <strong>@cr.Name</strong>
+                                                </label>
+                                            </div>
                                         </th>
                                     }
                                 </tr>

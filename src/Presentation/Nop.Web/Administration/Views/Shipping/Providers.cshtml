@@ -1,13 +1,14 @@
 ﻿@{    
     //page title
-    ViewBag.Title = T("Admin.Configuration.Shipping.Providers").Text;
+    ViewBag.Title = T("Admin.Configuration.Shipping.Providers.Title").Text;
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Shipping providers");
 }
+
 @Html.AntiForgeryToken()
-
-
 <div class="content-header clearfix">
     <h1 class="pull-left">
-        @T("Admin.Configuration.Shipping.Providers")
+        @T("Admin.Configuration.Shipping.Providers.Title")
     </h1>
     <div class="pull-right">
         &nbsp;
@@ -19,7 +20,6 @@
         <div class="panel-group">
             <div class="panel panel-default">
                 <div class="panel-body">
-
                     <div id="shippingproviders-grid"></div>
 
                     <script>
@@ -77,7 +77,7 @@
                                     info: false
                                 },
                                 editable: {
-                                    confirmation: false,
+                                    confirmation: "@T("Admin.Common.DeleteConfirmation")",
                                     mode: "inline"
                                 },
                                 scrollable: false,
@@ -107,7 +107,7 @@
                                     width: 100,
                                     headerAttributes: { style: "text-align:center" },
                                     attributes: { style: "text-align:center" },
-                                    template: '<img src="@Url.Content("~/Administration/Content/images/")active-#=IsActive#.gif" />'
+                                    template: '# if(IsActive) {# <i class="fa fa-check true-icon"></i> #} else {# <i class="fa fa-close false-icon"></i> #} #'
                                 }, {
                                     field: "SystemName",
                                     title: "@T("Admin.Configuration.Shipping.Providers.Configure")",

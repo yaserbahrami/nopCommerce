@@ -1,11 +1,13 @@
-﻿
-@{
+﻿@{
     var defaultGridPageSize = EngineContext.Current.Resolve<Nop.Core.Domain.Common.AdminAreaSettings>().DefaultGridPageSize;
     var gridPageSizes = EngineContext.Current.Resolve<Nop.Core.Domain.Common.AdminAreaSettings>().GridPageSizes;
 
     //page title
     ViewBag.Title = T("Admin.RecurringPayments").Text;
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Recurring payments");
 }
+
 @Html.AntiForgeryToken()
 <div class="content-header clearfix">
     <h1 class="pull-left">
@@ -15,11 +17,15 @@
         &nbsp;
     </div>
 </div>
+
 <div class="content">
     <div class="form-horizontal">
         <div class="panel-group">
             <div class="panel panel-default">
                 <div class="panel-body">
+                    <p>
+                        @T("Admin.RecurringPayments.Description")
+                    </p>
                     <div id="recurringpayments-grid"></div>
 
                     <script>
@@ -55,7 +61,7 @@
                                     pageSizes: [@(gridPageSizes)]
                                 },
                                 editable: {
-                                    confirmation: false,
+                                    confirmation: "@T("Admin.Common.DeleteConfirmation")",
                                     mode: "inline"
                                 },
                                 scrollable: false,
@@ -72,7 +78,7 @@
                                     }, {
                                         field: "CycleLength",
                                         title: "@T("Admin.RecurringPayments.Fields.CycleLength")",
-                                        width: 50
+                                        width: 100
                                     }, {
                                         field: "CyclePeriodStr",
                                         title: "@T("Admin.RecurringPayments.Fields.CyclePeriod")",
@@ -83,7 +89,7 @@
                                         width: 100,
                                         headerAttributes: { style: "text-align:center" },
                                         attributes: { style: "text-align:center" },
-                                        template: '<img src="@Url.Content("~/Administration/Content/images/")active-#=IsActive#.gif" />'
+                                        template: '# if(IsActive) {# <i class="fa fa-check true-icon"></i> #} else {# <i class="fa fa-close false-icon"></i> #} #'
                                     }, {
                                         field: "StartDate",
                                         title: "@T("Admin.RecurringPayments.Fields.StartDate")",

@@ -4,7 +4,6 @@
 @using Nop.Core.Domain.Media;
 @using Nop.Core.Infrastructure;
 @using System.Text;
-@using System.Globalization;
 @if (Model.Count > 0)
 {
     <div class="attributes">
@@ -33,7 +32,7 @@
                     {
                         case AttributeControlType.DropdownList:
                             {
-                        <select name="@(controlId)" id="@(controlId)">
+                        <select name="@(controlId)" id="@(controlId)" @(attribute.Values.Any(value => value.CustomerEntersQty) ? Html.Raw(string.Format("onchange=\"showHideDropdownQuantity('{0}')\"", controlId)) : null) >
                             @if (!attribute.IsRequired)
                             {
                                 <option value="0">---</option>
@@ -42,10 +41,23 @@
                             {
                                 var attributeName = String.IsNullOrEmpty(attributeValue.PriceAdjustment) ?
                                     attributeValue.Name :
-                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment).Text;
+                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment,
+                                        attributeValue.CustomerEntersQty ? T("Products.ProductAttributes.PriceAdjustment.PerItem").Text : string.Empty).Text;
                                 <option selected="@attributeValue.IsPreSelected" value="@attributeValue.Id">@attributeName</option>
                             }
                         </select>
+                        foreach (var attributeValue in attribute.Values.Where(value => value.CustomerEntersQty))
+                        {
+                            <div id="@(controlId)_@(attributeValue.Id)_qty_box" style="display:none">
+                                <label for="@(controlId)_@(attributeValue.Id)_qty">@(T("Products.ProductAttributes.PriceAdjustment.Quantity").Text)</label>
+                                <input class="qty-box" type="text" name="@(controlId)_@(attributeValue.Id)_qty" id="@(controlId)_@(attributeValue.Id)_qty" value="@(attributeValue.Quantity)"/>
+                            </div>
+                        }
+                        <script>
+                            $(document).ready(function() {
+                                showHideDropdownQuantity("@controlId");
+                            });
+                        </script>
                             }
                             break;
                         case AttributeControlType.RadioList:
@@ -55,13 +67,28 @@
                             {
                                 var attributeName = String.IsNullOrEmpty(attributeValue.PriceAdjustment) ?
                                     attributeValue.Name :
-                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment).Text;
+                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment,
+                                        attributeValue.CustomerEntersQty ? T("Products.ProductAttributes.PriceAdjustment.PerItem").Text : string.Empty).Text;
                                 <li>
-                                    <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected" />
+                                    <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected" 
+                                           @(attribute.Values.Any(value => value.CustomerEntersQty) ? Html.Raw(string.Format("onclick=\"showHideRadioQuantity('{0}')\"", controlId)) : null) />
                                     <label for="@(controlId)_@(attributeValue.Id)">@attributeName</label>
+
+                                    @if (attributeValue.CustomerEntersQty)
+                                    {
+                                        <div id="@(controlId)_@(attributeValue.Id)_qty_box" style="display:none">
+                                            <label for="@(controlId)_@(attributeValue.Id)_qty">@(T("Products.ProductAttributes.PriceAdjustment.Quantity").Text)</label>
+                                            <input class="qty-box" type="text" name="@(controlId)_@(attributeValue.Id)_qty" id="@(controlId)_@(attributeValue.Id)_qty" value="@(attributeValue.Quantity)" />
+                                        </div>
+                                    }
                                 </li>
                             }
                         </ul>
+                        <script>
+                            $(document).ready(function() {
+                                showHideRadioQuantity("@controlId");
+                            });
+                        </script>
                             }
                             break;
                         case AttributeControlType.Checkboxes:
@@ -72,10 +99,25 @@
                             {
                                 var attributeName = String.IsNullOrEmpty(attributeValue.PriceAdjustment) ?
                                     attributeValue.Name :
-                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment).Text;                             
+                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment,
+                                        attributeValue.CustomerEntersQty ? T("Products.ProductAttributes.PriceAdjustment.PerItem").Text : string.Empty).Text;                             
                                 <li>
-                                    <input id="@(controlId)_@(attributeValue.Id)" type="checkbox" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected" @(attribute.AttributeControlType == AttributeControlType.ReadonlyCheckboxes ? Html.Raw(" disabled=\"disabled\"") : null) />
+                                    <input id="@(controlId)_@(attributeValue.Id)" type="checkbox" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected" @(attribute.AttributeControlType == AttributeControlType.ReadonlyCheckboxes ? Html.Raw(" disabled=\"disabled\"") : null) 
+                                        @(attributeValue.CustomerEntersQty ? Html.Raw(string.Format("onchange=\"showHideCheckboxQuantity('{0}_{1}')\"", controlId, attributeValue.Id)) : null) />
                                     <label for="@(controlId)_@(attributeValue.Id)">@attributeName</label>
+
+                                    @if (attributeValue.CustomerEntersQty)
+                                    {
+                                        <div id="@(controlId)_@(attributeValue.Id)_qty_box" style="display:none">
+                                            <label for="@(controlId)_@(attributeValue.Id)_qty">@(T("Products.ProductAttributes.PriceAdjustment.Quantity").Text)</label>
+                                            <input class="qty-box" type="text" name="@(controlId)_@(attributeValue.Id)_qty" id="@(controlId)_@(attributeValue.Id)_qty" value="@(attributeValue.Quantity)" />
+                                            <script>
+                                                $(document).ready(function() {
+                                                    showHideCheckboxQuantity('@(controlId)_@(attributeValue.Id)');
+                                                })
+                                            </script>
+                                        </div>
+                                    }
                                 </li>
                             }
                         </ul>
@@ -209,23 +251,32 @@
                             {
                                 var attributeName = String.IsNullOrEmpty(attributeValue.PriceAdjustment) ?
                                     attributeValue.Name :
-                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment).Text;  
+                                    T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment, string.Empty).Text;  
                                 <li @(attributeValue.IsPreSelected ? @Html.Raw(" class=\"selected-value\"") : null)>
                                     <label for="@(controlId)_@(attributeValue.Id)">
                                         <span class="color-container" title="@attributeName">
                                             <span class="color" style="background-color:@(attributeValue.ColorSquaresRgb);">&nbsp;</span>
                                         </span>
-                                        <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected" />
+                                        <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected"
+                                               @(attribute.Values.Any(value => value.CustomerEntersQty) ? Html.Raw(string.Format("onclick=\"showHideRadioQuantity('{0}')\"", controlId)) : null) />
                                     </label>
                                 </li>
                             }
                         </ul>
+                        foreach (var attributeValue in attribute.Values.Where(value => value.CustomerEntersQty))
+                        {
+                            <div id="@(controlId)_@(attributeValue.Id)_qty_box" style="display:none">
+                                <label for="@(controlId)_@(attributeValue.Id)_qty">@(T("Products.ProductAttributes.PriceAdjustment.Quantity").Text)</label>
+                                <input class="qty-box" type="text" name="@(controlId)_@(attributeValue.Id)_qty" id="@(controlId)_@(attributeValue.Id)_qty" value="@(attributeValue.Quantity)" />
+                            </div>
+                        }
                         <script type="text/javascript">
                             $(document).ready(function() {
                                 $('.attributes #color-squares-@(attribute.Id)').delegate('input', 'click', function(event) {
                                     $('.attributes #color-squares-@(attribute.Id)').find('li').removeClass('selected-value');
                                     $(this).closest('li').addClass('selected-value');
                                 });
+                                showHideRadioQuantity("@controlId");
                             });
                         </script>
                             }
@@ -237,13 +288,14 @@
                                     {
                                         var attributeName = String.IsNullOrEmpty(attributeValue.PriceAdjustment) ?
                                             attributeValue.Name :
-                                            T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment).Text;
+                                            T("Products.ProductAttributes.PriceAdjustment", attributeValue.Name, attributeValue.PriceAdjustment, string.Empty).Text;
                                         <li @(attributeValue.IsPreSelected ? @Html.Raw(" class=\"selected-value\"") : null)>
                                             <label for="@(controlId)_@(attributeValue.Id)">
                                                 <span class="color-container">
                                                     <span class="color" style="background: url('@(attributeValue.ImageSquaresPictureModel.ImageUrl)') 50% 50% no-repeat;">&nbsp;</span>
                                                 </span>
-                                                <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected"/>
+                                                <input id="@(controlId)_@(attributeValue.Id)" type="radio" name="@(controlId)" value="@attributeValue.Id" checked="@attributeValue.IsPreSelected"
+                                                       @(attribute.Values.Any(value => value.CustomerEntersQty) ? Html.Raw(string.Format("onclick=\"showHideRadioQuantity('{0}', true)\"", controlId)) : null) />
                                             </label>
                                             <div class="tooltip-container">
                                                 <div class="tooltip-header">@attributeName</div>
@@ -252,12 +304,20 @@
                                         </li>
                                     }
                                 </ul>
+                                foreach (var attributeValue in attribute.Values.Where(value => value.CustomerEntersQty))
+                                {
+                                    <div id="@(controlId)_@(attributeValue.Id)_qty_box" style="display:none">
+                                        <label for="@(controlId)_@(attributeValue.Id)_qty">@(T("Products.ProductAttributes.PriceAdjustment.Quantity").Text)</label>
+                                        <input class="qty-box" type="text" name="@(controlId)_@(attributeValue.Id)_qty" id="@(controlId)_@(attributeValue.Id)_qty" value="@(attributeValue.Quantity)" />
+                                    </div>
+                                }
                                 <script type="text/javascript">
                             $(document).ready(function() {
                                 $('.attributes #color-squares-@(attribute.Id)').delegate('input', 'click', function(event) {
                                     $('.attributes #color-squares-@(attribute.Id)').find('li').removeClass('selected-value');
                                     $(this).closest('li').addClass('selected-value');
                                 });
+                                showHideRadioQuantity("@controlId", true);
                             });
                                 </script>
                             }
@@ -266,17 +326,39 @@
                 </dd>
             }
         </dl>
+        <script>
+            function showHideDropdownQuantity(id) {
+                $('select[name=' + id + '] > option').each(function() {
+                    $('#' + id + '_' + this.value + '_qty_box').hide();
+                });
+                $('#' + id + '_' + $('select[name=' + id + '] > option:selected').val() + '_qty_box').css('display', 'inline-block');
+            };
+
+            function showHideRadioQuantity(id) {
+                $('input[name=' + id + ']:radio').each(function() {
+                    $('#' + $(this).attr('id') + '_qty_box').hide();
+                });
+                $('#' + id + '_' + $('input[name=' + id + ']:radio:checked').val() + '_qty_box').css('display', 'inline-block');
+            };
+
+            function showHideCheckboxQuantity(id) {
+                if ($('#' + id).is(':checked'))
+                    $('#' + id + '_qty_box').css('display', 'inline-block');
+                else
+                    $('#' + id + '_qty_box').hide();
+            };
+        </script>
     </div>
 }
 @if (Model.Count > 0)
 {
     //dynamic update support
     var attributesHaveConditions = Model.Any(x => x.HasCondition);
-    var dynamicPriceUpdate = EngineContext.Current.Resolve<CatalogSettings>().AjaxProcessAttributeChange;
+    var attributesHaveAssociatedPictures = Model.Any(x => x.ProductId > 0);
     var attributeChangeScriptsBuilder = new StringBuilder();
     var productId = Model.First().ProductId;
     var attributeChangeHandlerFuncName = string.Format("attribute_change_handler_{0}", productId);
-    if (dynamicPriceUpdate)
+    if (EngineContext.Current.Resolve<CatalogSettings>().AjaxProcessAttributeChange)
     {
         //generate change event script
         foreach (var attribute in Model)
@@ -311,14 +393,20 @@
                 default:
                     break;
             }
+
+            foreach (var attributeValue in attribute.Values.Where(value => value.CustomerEntersQty))
+            {
+                attributeChangeScriptsBuilder.AppendFormat("$('#{0}_{1}_qty').on('input propertychange paste', function(){{{2}();}});\n", controlId, attributeValue.Id, attributeChangeHandlerFuncName);
+            }
         }
+        
         //render scripts
         //almost the same implementation is used in the \Views\Product\_RentalInfo.cshtml file
         <script type="text/javascript">
             function @(attributeChangeHandlerFuncName)() {
                 $.ajax({
                     cache: false,
-                    url: '@Html.Raw(Url.Action("productdetails_attributechange", "shoppingcart", new {productId = productId, validateAttributeConditions = attributesHaveConditions}))',
+                    url: '@Html.Raw(Url.Action("productdetails_attributechange", "shoppingcart", new {productId = productId, validateAttributeConditions = attributesHaveConditions, loadPicture = attributesHaveAssociatedPictures }))',
                     data: $('#product-details-form').serialize(),
                     type: 'post',
                     success: function(data) {
@@ -326,13 +414,19 @@
                             $('.price-value-@productId').text(data.price);
                         }
                         if (data.sku) {
-                            $('#sku-@productId').text(data.sku);
+                            $('#sku-@productId').text(data.sku).parent(".sku").show();
+                        } else {
+                            $('#sku-@productId').parent(".sku").hide();
                         }
                         if (data.mpn) {
-                            $('#mpn-@productId').text(data.mpn);
+                            $('#mpn-@productId').text(data.mpn).parent(".manufacturer-part-number").show();
+                        } else {
+                            $('#mpn-@productId').parent(".manufacturer-part-number").hide();
                         }
                         if (data.gtin) {
-                            $('#gtin-@productId').text(data.gtin);
+                            $('#gtin-@productId').text(data.gtin).parent(".gtin").show();
+                        } else {
+                            $('#gtin-@productId').parent(".gtin").hide();
                         }
                         if (data.stockAvailability) {
                             $('#stock-availability-value-@productId').text(data.stockAvailability);
@@ -349,6 +443,14 @@
                                 $('#product_attribute_input_' + data.disabledattributemappingids[i]).hide();
                             }
                         }
+                        if (data.pictureDefaultSizeUrl) {
+                            $('#main-product-img-@productId').attr("src", data.pictureDefaultSizeUrl);
+                        }
+                        if (data.pictureFullSizeUrl) {
+                            $('#main-product-img-lightbox-anchor-@productId').attr("href", data.pictureFullSizeUrl);
+                        }
+
+                        $.event.trigger({ type: "product_attributes_changed", changedData: data });
                     }
                 });
             }
@@ -357,149 +459,5 @@
                 @Html.Raw(attributeChangeScriptsBuilder.ToString())
             });
         </script>
-    }
-}
-@if (Model.Count > 0)
-{
-    //attribute picture update
-    var pictureAdjustmentTableScripts = new StringBuilder();
-    var pictureAttributeScripts = new StringBuilder();
-    string pictureAdjustmentTableName = "";
-    string pictureAdjustmentFuncName = "";
-    string pictureDefaultSizePrefix = "defaultsize";
-    string pictureFullSizePrefix = "fullsize";
-    var pictureSizes = new [] { pictureDefaultSizePrefix, pictureFullSizePrefix };
-    foreach (var attribute in Model)
-    {
-        string controlId = string.Format("product_attribute_{0}", attribute.Id);
-
-        pictureAdjustmentTableName = string.Format("productAttributeValueAdjustmentTable_{0}", attribute.ProductId);
-        pictureAdjustmentFuncName = string.Format("adjustProductAttributeValuePicture_{0}", attribute.ProductId);
-
-        switch (attribute.AttributeControlType)
-        {
-            case AttributeControlType.DropdownList:
-                {
-                    pictureAttributeScripts.AppendFormat("$('#{0}').change(function(){{{1}('{2}',{3});}});\n", controlId, pictureAdjustmentFuncName, controlId, attribute.ProductId);
-
-                    foreach (var pictureSize in pictureSizes)
-                    {
-                        pictureAdjustmentTableScripts.AppendFormat("{0}['{1}_{2}'] = new Array(", pictureAdjustmentTableName, controlId, pictureSize);
-                        int numberOfJsArrayItems = 0;
-                        if (!attribute.IsRequired)
-                        {
-                            pictureAdjustmentTableScripts.AppendFormat(CultureInfo.InvariantCulture, "'{0}',", "");
-                            numberOfJsArrayItems++;
-                        }
-                        foreach (var attributeValue in attribute.Values)
-                        {
-                            var pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            if (pictureSize == pictureDefaultSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            }
-                            else if (pictureSize == pictureFullSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.FullSizeImageUrl;
-                            }
-
-                            pictureAdjustmentTableScripts.AppendFormat(CultureInfo.InvariantCulture, "'{0}',", pictureUrl);
-                            numberOfJsArrayItems++;
-                        }
-                        //If you create an array with a single numeric parameter, that number is used for specifying the number of elements in this array.
-                        //so have a little hack here (we need at least two elements)
-                        if (numberOfJsArrayItems == 1)
-                        {
-                            pictureAdjustmentTableScripts.AppendFormat(CultureInfo.InvariantCulture, "'{0}',", "");
-                        }
-                        pictureAdjustmentTableScripts.Length -= 1;
-                        pictureAdjustmentTableScripts.Append(");\n");
-                    }
-                }
-                break;
-            case AttributeControlType.RadioList:
-            case AttributeControlType.ColorSquares:
-            case AttributeControlType.ImageSquares:
-                {
-                    foreach (var attributeValue in attribute.Values)
-                    {
-                        pictureAttributeScripts.AppendFormat("$('#{0}_{1}').click(function(){{{2}('{3}_{4}',{5});}});\n", controlId, attributeValue.Id, pictureAdjustmentFuncName, controlId, attributeValue.Id, attribute.ProductId);
-                        foreach (var pictureSize in pictureSizes)
-                        {
-                            var pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            if (pictureSize == pictureDefaultSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            }
-                            else if (pictureSize == pictureFullSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.FullSizeImageUrl;
-                            }
-                            pictureAdjustmentTableScripts.AppendFormat(CultureInfo.InvariantCulture, "{0}['{1}_{2}_{3}'] = '{4}';\n", pictureAdjustmentTableName, controlId, attributeValue.Id, pictureSize, pictureUrl);
-                        }
-                    }
-                }
-                break;
-            case AttributeControlType.Checkboxes:
-            case AttributeControlType.ReadonlyCheckboxes:
-                {
-                    foreach (var attributeValue in attribute.Values)
-                    {
-                        pictureAttributeScripts.AppendFormat("$('#{0}_{1}').click(function(){{{2}('{3}_{4}',{5});}});\n", controlId, attributeValue.Id, pictureAdjustmentFuncName, controlId, attributeValue.Id, attribute.ProductId);
-                        foreach (var pictureSize in pictureSizes)
-                        {
-                            var pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            if (pictureSize == pictureDefaultSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.ImageUrl;
-                            }
-                            else if (pictureSize == pictureFullSizePrefix)
-                            {
-                                pictureUrl = attributeValue.PictureModel.FullSizeImageUrl;
-                            }
-                            pictureAdjustmentTableScripts.AppendFormat(CultureInfo.InvariantCulture, "{0}['{1}_{2}_{3}'] = '{4}';\n", pictureAdjustmentTableName, controlId, attributeValue.Id, pictureSize, pictureUrl);
-                        }
-                    }
-                }
-                break;
-            default:
-                break;
-        }
-    }
-    if (!String.IsNullOrEmpty(pictureAttributeScripts.ToString()))
-    {
-    <script type="text/javascript">
-            
-        //Picture adjustment table
-        var @(pictureAdjustmentTableName) = new Array();
-        //Picture adjustment table initialize
-        @Html.Raw(pictureAdjustmentTableScripts.ToString())
-        //Picture adjustment function
-        function @(pictureAdjustmentFuncName)(controlId, productId) {
-            var ctrl = $('#' + controlId);
-            var pictureDefaultSizeUrl = '';
-            var pictureFullSizeUrl = '';
-            if((ctrl.is(':radio') && ctrl.is(':checked')) || (ctrl.is(':checkbox') && ctrl.is(':checked'))) {
-                pictureDefaultSizeUrl = @(pictureAdjustmentTableName)[controlId + '_@(pictureDefaultSizePrefix)'];
-                pictureFullSizeUrl = @(pictureAdjustmentTableName)[controlId + '_@(pictureFullSizePrefix)'];
-            } else if(ctrl.is('select')) {
-                var idx = $('#' + controlId + " option").index($('#' + controlId + " option:selected"));
-                if(idx != -1) {
-                    pictureDefaultSizeUrl = @(pictureAdjustmentTableName)[controlId + '_@(pictureDefaultSizePrefix)'][idx];
-                    pictureFullSizeUrl = @(pictureAdjustmentTableName)[controlId + '_@(pictureFullSizePrefix)'][idx];
-                }
-            }
-            if (typeof pictureDefaultSizeUrl == 'string' && pictureDefaultSizeUrl != '') {
-                $('#main-product-img-' + productId).attr("src", pictureDefaultSizeUrl);
-            }
-            if (typeof pictureFullSizeUrl == 'string' && pictureFullSizeUrl != '') {
-                $('#main-product-img-lightbox-anchor-' + productId).attr("href", pictureFullSizeUrl);
-            }
-        }
-        // Picture attributes handlers
-        $(document).ready(function() {
-            @Html.Raw(pictureAttributeScripts.ToString())
-        });
-    </script>
     }
 }

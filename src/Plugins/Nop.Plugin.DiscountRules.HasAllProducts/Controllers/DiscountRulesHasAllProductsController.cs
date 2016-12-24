@@ -6,6 +6,7 @@ using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Discounts;
 using Nop.Plugin.DiscountRules.HasAllProducts.Models;
+using Nop.Services;
 using Nop.Services.Catalog;
 using Nop.Services.Configuration;
 using Nop.Services.Discounts;
@@ -13,7 +14,6 @@ using Nop.Services.Localization;
 using Nop.Services.Security;
 using Nop.Services.Stores;
 using Nop.Services.Vendors;
-using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Kendoui;
 using Nop.Web.Framework.Security;
@@ -83,7 +83,7 @@ namespace Nop.Plugin.DiscountRules.HasAllProducts.Controllers
             //add a prefix
             ViewData.TemplateInfo.HtmlFieldPrefix = string.Format("DiscountRulesHasAllProducts{0}", discountRequirementId.HasValue ? discountRequirementId.Value.ToString() : "0");
 
-            return View("~/Plugins/DiscountRules.HasAllProducts/Views/DiscountRulesHasAllProducts/Configure.cshtml", model);
+            return View("~/Plugins/DiscountRules.HasAllProducts/Views/Configure.cshtml", model);
         }
 
         [HttpPost]
@@ -159,7 +159,7 @@ namespace Nop.Plugin.DiscountRules.HasAllProducts.Controllers
             ViewBag.productIdsInput = productIdsInput;
             ViewBag.btnId = btnId;
 
-            return View("~/Plugins/DiscountRules.HasAllProducts/Views/DiscountRulesHasAllProducts/ProductAddPopup.cshtml", model);
+            return View("~/Plugins/DiscountRules.HasAllProducts/Views/ProductAddPopup.cshtml", model);
         }
 
         [HttpPost]

@@ -140,6 +140,16 @@ namespace Nop.Core.Domain.Customers
         /// </summary>
         public bool EnteringEmailTwice { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether registration is required for downloadable products
+        /// </summary>
+        public bool RequireRegistrationForDownloadableProducts { get; set; }
+
+        /// <summary>
+        /// Gets or sets interval (in minutes) with which the Delete Guest Task runs
+        /// </summary>
+        public int DeleteGuestTaskOlderThanMinutes { get; set; }
+
         #region Form fields
 
         /// <summary>

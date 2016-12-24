@@ -11,6 +11,7 @@ using Nop.Services.Common;
 using Nop.Services.Directory;
 using Nop.Services.ExportImport;
 using Nop.Services.Localization;
+using Nop.Services.Logging;
 using Nop.Services.Security;
 using Nop.Services.Stores;
 using Nop.Web.Framework.Controllers;
@@ -34,10 +35,11 @@ namespace Nop.Admin.Controllers
         private readonly IStoreMappingService _storeMappingService;
         private readonly IExportManager _exportManager;
         private readonly IImportManager _importManager;
+        private readonly ICustomerActivityService _customerActivityService;
 
-	    #endregion
+        #endregion
 
-		#region Constructors
+        #region Constructors
 
         public CountryController(ICountryService countryService,
             IStateProvinceService stateProvinceService, 
@@ -49,8 +51,9 @@ namespace Nop.Admin.Controllers
             IStoreService storeService,
             IStoreMappingService storeMappingService,
             IExportManager exportManager,
-            IImportManager importManager)
-		{
+            IImportManager importManager,
+            ICustomerActivityService customerActivityService)
+        {
             this._countryService = countryService;
             this._stateProvinceService = stateProvinceService;
             this._localizationService = localizationService;
@@ -62,7 +65,8 @@ namespace Nop.Admin.Controllers
             this._storeMappingService = storeMappingService;
             this._exportManager = exportManager;
             this._importManager = importManager;
-		}
+            this._customerActivityService = customerActivityService;
+        }
 
 		#endregion 
 
@@ -98,27 +102,31 @@ namespace Nop.Admin.Controllers
             if (model == null)
                 throw new ArgumentNullException("model");
 
-            model.AvailableStores = _storeService
-                .GetAllStores()
-                .Select(s => s.ToModel())
-                .ToList();
-            if (!excludeProperties)
+            if (!excludeProperties && country != null)
+                model.SelectedStoreIds = _storeMappingService.GetStoresIdsWithAccess(country).ToList();
+
+            var allStores = _storeService.GetAllStores();
+            foreach (var store in allStores)
             {
-                if (country != null)
+                model.AvailableStores.Add(new SelectListItem
                 {
-                    model.SelectedStoreIds = _storeMappingService.GetStoresIdsWithAccess(country);
-                }
+                    Text = store.Name,
+                    Value = store.Id.ToString(),
+                    Selected = model.SelectedStoreIds.Contains(store.Id)
+                });
             }
         }
 
         [NonAction]
         protected virtual void SaveStoreMappings(Country country, CountryModel model)
         {
+            country.LimitedToStores = model.SelectedStoreIds.Any();
+
             var existingStoreMappings = _storeMappingService.GetStoreMappings(country);
             var allStores = _storeService.GetAllStores();
             foreach (var store in allStores)
             {
-                if (model.SelectedStoreIds != null && model.SelectedStoreIds.Contains(store.Id))
+                if (model.SelectedStoreIds.Contains(store.Id))
                 {
                     //new store
                     if (existingStoreMappings.Count(sm => sm.StoreId == store.Id) == 0)
@@ -194,6 +202,10 @@ namespace Nop.Admin.Controllers
             {
                 var country = model.ToEntity();
                 _countryService.InsertCountry(country);
+
+                //activity log
+                _customerActivityService.InsertActivity("AddNewCountry", _localizationService.GetResource("ActivityLog.AddNewCountry"), country.Id);
+
                 //locales
                 UpdateLocales(country, model);
                 //Stores
@@ -254,6 +266,10 @@ namespace Nop.Admin.Controllers
             {
                 country = model.ToEntity(country);
                 _countryService.UpdateCountry(country);
+
+                //activity log
+                _customerActivityService.InsertActivity("EditCountry", _localizationService.GetResource("ActivityLog.EditCountry"), country.Id);
+
                 //locales
                 UpdateLocales(country, model);
                 //Stores
@@ -295,6 +311,9 @@ namespace Nop.Admin.Controllers
                     throw new NopException("The country can't be deleted. It has associated addresses");
 
                 _countryService.DeleteCountry(country);
+
+                //activity log
+                _customerActivityService.InsertActivity("DeleteCountry", _localizationService.GetResource("ActivityLog.DeleteCountry"), country.Id);
 
                 SuccessNotification(_localizationService.GetResource("Admin.Configuration.Countries.Deleted"));
                 return RedirectToAction("List");
@@ -393,6 +412,10 @@ namespace Nop.Admin.Controllers
                 var sp = model.ToEntity();
 
                 _stateProvinceService.InsertStateProvince(sp);
+
+                //activity log
+                _customerActivityService.InsertActivity("AddNewStateProvince", _localizationService.GetResource("ActivityLog.AddNewStateProvince"), sp.Id);
+
                 UpdateLocales(sp, model);
 
                 ViewBag.RefreshPage = true;
@@ -442,6 +465,9 @@ namespace Nop.Admin.Controllers
                 sp = model.ToEntity(sp);
                 _stateProvinceService.UpdateStateProvince(sp);
 
+                //activity log
+                _customerActivityService.InsertActivity("EditStateProvince", _localizationService.GetResource("ActivityLog.EditStateProvince"), sp.Id);
+
                 UpdateLocales(sp, model);
 
                 ViewBag.RefreshPage = true;
@@ -471,6 +497,9 @@ namespace Nop.Admin.Controllers
 
             //int countryId = state.CountryId;
             _stateProvinceService.DeleteStateProvince(state);
+
+            //activity log
+            _customerActivityService.InsertActivity("DeleteStateProvince", _localizationService.GetResource("ActivityLog.DeleteStateProvince"), state.Id);
 
             return new NullJsonResult();
         }
@@ -512,7 +541,7 @@ namespace Nop.Admin.Controllers
                 else
                 {
                     //some country is selected
-                    if (result.Count == 0)
+                    if (!result.Any())
                     {
                         //country does not have states
                         result.Insert(0, new { id = 0, name = _localizationService.GetResource("Admin.Address.OtherNonUS") });

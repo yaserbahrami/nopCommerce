@@ -7,8 +7,10 @@ using Nop.Admin.Extensions;
 using Nop.Admin.Models.Messages;
 using Nop.Core;
 using Nop.Core.Domain.Messages;
+using Nop.Services.Customers;
 using Nop.Services.Helpers;
 using Nop.Services.Localization;
+using Nop.Services.Logging;
 using Nop.Services.Messages;
 using Nop.Services.Security;
 using Nop.Services.Stores;
@@ -29,6 +31,8 @@ namespace Nop.Admin.Controllers
         private readonly IStoreContext _storeContext;
         private readonly IStoreService _storeService;
         private readonly IPermissionService _permissionService;
+	    private readonly ICustomerService _customerService;
+        private readonly ICustomerActivityService _customerActivityService;
 
         public CampaignController(ICampaignService campaignService,
             IDateTimeHelper dateTimeHelper, 
@@ -39,7 +43,9 @@ namespace Nop.Admin.Controllers
             IMessageTokenProvider messageTokenProvider,
             IStoreContext storeContext,
             IStoreService storeService,
-            IPermissionService permissionService)
+            IPermissionService permissionService, 
+            ICustomerService customerService,
+            ICustomerActivityService customerActivityService)
 		{
             this._campaignService = campaignService;
             this._dateTimeHelper = dateTimeHelper;
@@ -51,6 +57,8 @@ namespace Nop.Admin.Controllers
             this._storeContext = storeContext;
             this._storeService = storeService;
             this._permissionService = permissionService;
+            this._customerService = customerService;
+            this._customerActivityService = customerActivityService;
 		}
 
         [NonAction]
@@ -89,6 +97,53 @@ namespace Nop.Admin.Controllers
                 });
             }
         }
+        
+        [NonAction]
+        protected virtual void PrepareCustomerRolesModel(CampaignModel model)
+	    {
+            if (model == null)
+                throw new ArgumentNullException("model");
+
+            model.AvailableCustomerRoles.Add(new SelectListItem
+            {
+                Text = _localizationService.GetResource("Admin.Common.All"),
+                Value = "0"
+            });
+            var roles = _customerService.GetAllCustomerRoles();
+            foreach (var customerRole in roles)
+            {
+                model.AvailableCustomerRoles.Add(new SelectListItem
+                {
+                    Text = customerRole.Name,
+                    Value = customerRole.Id.ToString()
+                });
+            }
+        }
+
+        [NonAction]
+        protected virtual void PrepareEmailAccountsModel(CampaignModel model)
+        {
+            if (model == null)
+                throw new ArgumentNullException("model");
+
+            model.AvailableEmailAccounts = _emailAccountService.GetAllEmailAccounts().Select(emailAccount => new SelectListItem
+            {
+                Value = emailAccount.Id.ToString(),
+                Text = string.Format("{0} ({1})", emailAccount.DisplayName, emailAccount.Email)
+            }).ToList();
+        }
+
+        [NonAction]
+        protected virtual EmailAccount GetEmailAccount(int emailAccountId)
+        {
+            var emailAccount = _emailAccountService.GetEmailAccountById(emailAccountId)
+                ?? _emailAccountService.GetEmailAccountById(_emailAccountSettings.DefaultEmailAccountId);
+
+            if (emailAccount == null)
+                throw new NopException("Email account could not be loaded");
+
+            return emailAccount;
+        }
 
         public ActionResult Index()
         {
@@ -100,16 +155,34 @@ namespace Nop.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCampaigns))
                 return AccessDeniedView();
 
-            return View();
+            var stores = _storeService.GetAllStores();
+            var model = new CampaignListModel();
+
+            model.AvailableStores.Add(new SelectListItem
+            {
+                Text = _localizationService.GetResource("Admin.Common.All"),
+                Value = "0"
+            });
+            
+            foreach (var store in stores)
+            {
+                model.AvailableStores.Add(new SelectListItem
+                {
+                    Text = store.Name,
+                    Value = store.Id.ToString()
+                });
+            }
+
+            return View(model);
 		}
 
         [HttpPost]
-        public ActionResult List(DataSourceRequest command)
+        public ActionResult List(DataSourceRequest command, CampaignListModel searchModel)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCampaigns))
                 return AccessDeniedView();
 
-            var campaigns = _campaignService.GetAllCampaigns();
+            var campaigns = _campaignService.GetAllCampaigns(searchModel.StoreId);
             var gridModel = new DataSourceResult
             {
                 Data = campaigns.Select(x =>
@@ -134,6 +207,12 @@ namespace Nop.Admin.Controllers
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
+            model.EmailAccountId = _emailAccountSettings.DefaultEmailAccountId;
+
             return View(model);
         }
 
@@ -151,6 +230,9 @@ namespace Nop.Admin.Controllers
                     (DateTime?)_dateTimeHelper.ConvertToUtcTime(model.DontSendBeforeDate.Value) : null;
                 _campaignService.InsertCampaign(campaign);
 
+                //activity log
+                _customerActivityService.InsertActivity("AddNewCampaign", _localizationService.GetResource("ActivityLog.AddNewCampaign"), campaign.Id);
+
                 SuccessNotification(_localizationService.GetResource("Admin.Promotions.Campaigns.Added"));
                 return continueEditing ? RedirectToAction("Edit", new { id = campaign.Id }) : RedirectToAction("List");
             }
@@ -159,6 +241,11 @@ namespace Nop.Admin.Controllers
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
+
             return View(model);
         }
 
@@ -178,6 +265,12 @@ namespace Nop.Admin.Controllers
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
+            model.EmailAccountId = _emailAccountSettings.DefaultEmailAccountId;
+
             return View(model);
 		}
 
@@ -201,6 +294,9 @@ namespace Nop.Admin.Controllers
                     (DateTime?)_dateTimeHelper.ConvertToUtcTime(model.DontSendBeforeDate.Value) : null;
                 _campaignService.UpdateCampaign(campaign);
 
+                //activity log
+                _customerActivityService.InsertActivity("EditCampaign", _localizationService.GetResource("ActivityLog.EditCampaign"), campaign.Id);
+
                 SuccessNotification(_localizationService.GetResource("Admin.Promotions.Campaigns.Updated"));
                 return continueEditing ? RedirectToAction("Edit", new { id = campaign.Id }) : RedirectToAction("List");
             }
@@ -209,6 +305,11 @@ namespace Nop.Admin.Controllers
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
+
             return View(model);
 		}
 
@@ -223,19 +324,25 @@ namespace Nop.Admin.Controllers
             if (campaign == null)
                 //No campaign found with the specified id
                 return RedirectToAction("List");
-
-
+            
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
+
+            if (!CommonHelper.IsValidEmail(model.TestEmail))
+            {
+                ErrorNotification(_localizationService.GetResource("Admin.Common.WrongEmail"), false);
+                return View(model);
+            }
 
             try
             {
-                var emailAccount = _emailAccountService.GetEmailAccountById(_emailAccountSettings.DefaultEmailAccountId);
-                if (emailAccount == null)
-                    throw new NopException("Email account could not be loaded");
 
-
+                var emailAccount = GetEmailAccount(model.EmailAccountId);
                 var subscription = _newsLetterSubscriptionService.GetNewsLetterSubscriptionByEmailAndStoreId(model.TestEmail, _storeContext.CurrentStore.Id);
                 if (subscription != null)
                 {
@@ -274,21 +381,23 @@ namespace Nop.Admin.Controllers
                 //No campaign found with the specified id
                 return RedirectToAction("List");
 
-
             model.AllowedTokens = FormatTokens(_messageTokenProvider.GetListOfCampaignAllowedTokens());
             //stores
             PrepareStoresModel(model);
+            //customer roles
+            PrepareCustomerRolesModel(model);
+            //email accounts
+            PrepareEmailAccountsModel(model);
 
             try
             {
-                var emailAccount = _emailAccountService.GetEmailAccountById(_emailAccountSettings.DefaultEmailAccountId);
-                if (emailAccount == null)
-                    throw new NopException("Email account could not be loaded");
+                var emailAccount = GetEmailAccount(model.EmailAccountId);
 
                 //subscribers of certain store?
                 var store = _storeService.GetStoreById(campaign.StoreId);
                 var storeId = store != null ? store.Id : 0;
-                var subscriptions = _newsLetterSubscriptionService.GetAllNewsLetterSubscriptions(storeId: storeId,
+                var subscriptions = _newsLetterSubscriptionService.GetAllNewsLetterSubscriptions(storeId: storeId, 
+                    customerRoleId: model.CustomerRoleId,
                     isActive: true);
                 var totalEmailsSent = _campaignService.SendCampaign(campaign, emailAccount, subscriptions);
                 SuccessNotification(string.Format(_localizationService.GetResource("Admin.Promotions.Campaigns.MassEmailSentToCustomers"), totalEmailsSent), false);
@@ -316,7 +425,11 @@ namespace Nop.Admin.Controllers
 
             _campaignService.DeleteCampaign(campaign);
 
+            //activity log
+            _customerActivityService.InsertActivity("DeleteCampaign", _localizationService.GetResource("ActivityLog.DeleteCampaign"), campaign.Id);
+
             SuccessNotification(_localizationService.GetResource("Admin.Promotions.Campaigns.Deleted"));
+
 			return RedirectToAction("List");
 		}
 	}

@@ -12,17 +12,20 @@ using Nop.Core.Domain.Payments;
 using Nop.Core.Domain.Shipping;
 using Nop.Core.Domain.Tax;
 using Nop.Core.Plugins;
+using Nop.Services;
 using Nop.Services.Authentication.External;
 using Nop.Services.Cms;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
+using Nop.Services.Customers;
 using Nop.Services.Localization;
+using Nop.Services.Logging;
 using Nop.Services.Payments;
 using Nop.Services.Security;
 using Nop.Services.Shipping;
+using Nop.Services.Shipping.Pickup;
 using Nop.Services.Stores;
 using Nop.Services.Tax;
-using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Kendoui;
 
@@ -45,9 +48,12 @@ namespace Nop.Admin.Controllers
         private readonly TaxSettings _taxSettings;
         private readonly ExternalAuthenticationSettings _externalAuthenticationSettings;
         private readonly WidgetSettings _widgetSettings;
-	    #endregion
+        private readonly ICustomerActivityService _customerActivityService;
+        private readonly ICustomerService _customerService;
+        
+        #endregion
 
-		#region Constructors
+        #region Ctor
 
         public PluginController(IPluginFinder pluginFinder,
             IOfficialFeedManager officialFeedManager,
@@ -61,8 +67,10 @@ namespace Nop.Admin.Controllers
             ShippingSettings shippingSettings,
             TaxSettings taxSettings, 
             ExternalAuthenticationSettings externalAuthenticationSettings, 
-            WidgetSettings widgetSettings)
-		{
+            WidgetSettings widgetSettings,
+            ICustomerActivityService customerActivityService,
+            ICustomerService customerService)
+        {
             this._pluginFinder = pluginFinder;
             this._officialFeedManager = officialFeedManager;
             this._localizationService = localizationService;
@@ -76,7 +84,9 @@ namespace Nop.Admin.Controllers
             this._taxSettings = taxSettings;
             this._externalAuthenticationSettings = externalAuthenticationSettings;
             this._widgetSettings = widgetSettings;
-		}
+            this._customerActivityService = customerActivityService;
+            this._customerService = customerService;
+        }
 
 		#endregion 
 
@@ -84,7 +94,7 @@ namespace Nop.Admin.Controllers
 
         [NonAction]
         protected virtual PluginModel PreparePluginModel(PluginDescriptor pluginDescriptor, 
-            bool prepareLocales = true, bool prepareStores = true)
+            bool prepareLocales = true, bool prepareStores = true, bool prepareAcl = true)
         {
             var pluginModel = pluginDescriptor.ToModel();
             //logo
@@ -101,17 +111,35 @@ namespace Nop.Admin.Controllers
             if (prepareStores)
             {
                 //stores
-                pluginModel.AvailableStores = _storeService
-                    .GetAllStores()
-                    .Select(s => s.ToModel())
-                    .ToList();
-                pluginModel.SelectedStoreIds = pluginDescriptor.LimitedToStores.ToArray();
-                pluginModel.LimitedToStores = pluginDescriptor.LimitedToStores.Count > 0;
+                pluginModel.SelectedStoreIds = pluginDescriptor.LimitedToStores;
+                var allStores = _storeService.GetAllStores();
+                foreach (var store in allStores)
+                {
+                    pluginModel.AvailableStores.Add(new SelectListItem
+                    {
+                        Text = store.Name,
+                        Value = store.Id.ToString(),
+                        Selected = pluginModel.SelectedStoreIds.Contains(store.Id)
+                    });
+                }
             }
 
+            if (prepareAcl)
+            {
+                //acl
+                pluginModel.SelectedCustomerRoleIds = pluginDescriptor.LimitedToCustomerRoles;
+                foreach (var role in _customerService.GetAllCustomerRoles(true))
+                {
+                    pluginModel.AvailableCustomerRoles.Add(new SelectListItem
+                    {
+                        Text = role.Name,
+                        Value = role.Id.ToString(),
+                        Selected = pluginModel.SelectedCustomerRoleIds.Contains(role.Id)
+                    });
+                }
+            }
 
             //configuration URLs
-
             if (pluginDescriptor.Installed)
             {
                 //specify configuration URL only when a plugin is already installed
@@ -130,6 +158,11 @@ namespace Nop.Admin.Controllers
                 {
                     //shipping rate computation method
                     configurationUrl = Url.Action("ConfigureProvider", "Shipping", new { systemName = pluginDescriptor.SystemName });
+                }
+                else if (pluginInstance is IPickupPointProvider)
+                {
+                    //pickup point provider
+                    configurationUrl = Url.Action("ConfigurePickupPointProvider", "Shipping", new { systemName = pluginDescriptor.SystemName });
                 }
                 else if (pluginInstance is ITaxProvider)
                 {
@@ -168,6 +201,12 @@ namespace Nop.Admin.Controllers
                     //shipping rate computation method
                     pluginModel.CanChangeEnabled = true;
                     pluginModel.IsEnabled = ((IShippingRateComputationMethod)pluginInstance).IsShippingRateComputationMethodActive(_shippingSettings);
+                }
+                else if (pluginInstance is IPickupPointProvider)
+                {
+                    //pickup point provider
+                    pluginModel.CanChangeEnabled = true;
+                    pluginModel.IsEnabled = ((IPickupPointProvider)pluginInstance).IsPickupPointProviderActive(_shippingSettings);
                 }
                 else if (pluginInstance is ITaxProvider)
                 {
@@ -246,10 +285,10 @@ namespace Nop.Admin.Controllers
 	            return AccessDeniedView();
 
 	        var loadMode = (LoadPluginsMode) model.SearchLoadModeId;
-            var pluginDescriptors = _pluginFinder.GetPluginDescriptors(loadMode, 0, model.SearchGroup).ToList();
+            var pluginDescriptors = _pluginFinder.GetPluginDescriptors(loadMode, group: model.SearchGroup).ToList();
 	        var gridModel = new DataSourceResult
             {
-                Data = pluginDescriptors.Select(x => PreparePluginModel(x, false, false))
+                Data = pluginDescriptors.Select(x => PreparePluginModel(x, false, false, false))
                 .OrderBy(x => x.Group)
                 .ToList(),
                 Total = pluginDescriptors.Count()
@@ -284,6 +323,10 @@ namespace Nop.Admin.Controllers
 
                 //install plugin
                 pluginDescriptor.Instance().Install();
+
+                //activity log
+                _customerActivityService.InsertActivity("InstallNewPlugin", _localizationService.GetResource("ActivityLog.InstallNewPlugin"), pluginDescriptor.FriendlyName);
+
                 SuccessNotification(_localizationService.GetResource("Admin.Configuration.Plugins.Installed"));
 
                 //restart application
@@ -323,6 +366,10 @@ namespace Nop.Admin.Controllers
 
                 //uninstall plugin
                 pluginDescriptor.Instance().Uninstall();
+
+                //activity log
+                _customerActivityService.InsertActivity("UninstallPlugin", _localizationService.GetResource("ActivityLog.UninstallPlugin"), pluginDescriptor.FriendlyName);
+
                 SuccessNotification(_localizationService.GetResource("Admin.Configuration.Plugins.Uninstalled"));
 
                 //restart application
@@ -336,6 +383,8 @@ namespace Nop.Admin.Controllers
             return RedirectToAction("List");
         }
 
+        [HttpPost, ActionName("List")]
+        [FormValueRequired("plugin-reload-grid")]
         public ActionResult ReloadList()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManagePlugins))
@@ -401,10 +450,11 @@ namespace Nop.Admin.Controllers
                 pluginDescriptor.FriendlyName = model.FriendlyName;
                 pluginDescriptor.DisplayOrder = model.DisplayOrder;
                 pluginDescriptor.LimitedToStores.Clear();
-                if (model.LimitedToStores && model.SelectedStoreIds != null)
-                {
-                    pluginDescriptor.LimitedToStores = model.SelectedStoreIds.ToList();
-                }
+                if (model.SelectedStoreIds.Any())
+                    pluginDescriptor.LimitedToStores = model.SelectedStoreIds;
+                pluginDescriptor.LimitedToCustomerRoles.Clear();
+                if (model.SelectedCustomerRoleIds.Any())
+                    pluginDescriptor.LimitedToCustomerRoles = model.SelectedCustomerRoleIds;
                 PluginFileParser.SavePluginDescriptionFile(pluginDescriptor);
                 //reset plugin cache
                 _pluginFinder.ReloadPlugins();
@@ -459,6 +509,29 @@ namespace Nop.Admin.Controllers
                             {
                                 //mark as active
                                 _shippingSettings.ActiveShippingRateComputationMethodSystemNames.Add(srcm.PluginDescriptor.SystemName);
+                                _settingService.SaveSetting(_shippingSettings);
+                            }
+                        }
+                    }
+                    else if (pluginInstance is IPickupPointProvider)
+                    {
+                        //pickup point provider
+                        var pickupPointProvider = (IPickupPointProvider)pluginInstance;
+                        if (pickupPointProvider.IsPickupPointProviderActive(_shippingSettings))
+                        {
+                            if (!model.IsEnabled)
+                            {
+                                //mark as disabled
+                                _shippingSettings.ActivePickupPointProviderSystemNames.Remove(pickupPointProvider.PluginDescriptor.SystemName);
+                                _settingService.SaveSetting(_shippingSettings);
+                            }
+                        }
+                        else
+                        {
+                            if (model.IsEnabled)
+                            {
+                                //mark as active
+                                _shippingSettings.ActivePickupPointProviderSystemNames.Add(pickupPointProvider.PluginDescriptor.SystemName);
                                 _settingService.SaveSetting(_shippingSettings);
                             }
                         }
@@ -523,6 +596,9 @@ namespace Nop.Admin.Controllers
                             }
                         }
                     }
+
+                    //activity log
+                    _customerActivityService.InsertActivity("EditPlugin", _localizationService.GetResource("ActivityLog.EditPlugin"), pluginDescriptor.FriendlyName);
                 }
 
                 ViewBag.RefreshPage = true;

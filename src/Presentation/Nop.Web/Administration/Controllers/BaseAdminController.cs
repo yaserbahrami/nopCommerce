@@ -1,5 +1,4 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using System.Web.Mvc;
 using Nop.Core;
 using Nop.Core.Infrastructure;
@@ -12,6 +11,7 @@ namespace Nop.Admin.Controllers
     [AdminValidateIpAddress]
     [AdminAuthorize]
     [AdminAntiForgery]
+    [AdminVendorValidation]
     public abstract partial class BaseAdminController : BaseController
     {
         /// <summary>

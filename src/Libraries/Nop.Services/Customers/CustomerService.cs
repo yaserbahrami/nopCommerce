@@ -119,7 +119,7 @@ namespace Nop.Services.Customers
         #region Methods
 
         #region Customers
-        
+
         /// <summary>
         /// Gets all customers
         /// </summary>
@@ -137,6 +137,7 @@ namespace Nop.Services.Customers
         /// <param name="company">Company; null to load all customers</param>
         /// <param name="phone">Phone; null to load all customers</param>
         /// <param name="zipPostalCode">Phone; null to load all customers</param>
+        /// <param name="ipAddress">IP address; null to load all customers</param>
         /// <param name="loadOnlyWithShoppingCart">Value indicating whether to load customers only with shopping cart</param>
         /// <param name="sct">Value indicating what shopping cart type to filter; userd when 'loadOnlyWithShoppingCart' param is 'true'</param>
         /// <param name="pageIndex">Page index</param>
@@ -348,6 +349,9 @@ namespace Nop.Services.Customers
             }
 
             UpdateCustomer(customer);
+
+            //event notification
+            _eventPublisher.EntityDeleted(customer);
         }
 
         /// <summary>
@@ -374,7 +378,7 @@ namespace Nop.Services.Customers
                 return new List<Customer>();
 
             var query = from c in _customerRepository.Table
-                        where customerIds.Contains(c.Id)
+                        where customerIds.Contains(c.Id) && !c.Deleted
                         select c;
             var customers = query.ToList();
             //sort by passed identifiers
@@ -387,7 +391,7 @@ namespace Nop.Services.Customers
             }
             return sortedCustomers;
         }
-
+        
         /// <summary>
         /// Gets a customer by GUID
         /// </summary>
@@ -557,7 +561,7 @@ namespace Nop.Services.Customers
             {
                 _genericAttributeService.SaveAttribute<ShippingOption>(customer, SystemCustomerAttributeNames.SelectedShippingOption, null, storeId);
                 _genericAttributeService.SaveAttribute<ShippingOption>(customer, SystemCustomerAttributeNames.OfferedShippingOptions, null, storeId);
-                _genericAttributeService.SaveAttribute(customer, SystemCustomerAttributeNames.SelectedPickUpInStore, false, storeId);
+                _genericAttributeService.SaveAttribute<ShippingOption>(customer, SystemCustomerAttributeNames.SelectedPickupPoint, null, storeId);
             }
 
             //clear selected payment method
@@ -794,7 +798,7 @@ namespace Nop.Services.Customers
             {
                 var query = from cr in _customerRoleRepository.Table
                             orderby cr.Name
-                            where (showHidden || cr.Active)
+                            where showHidden || cr.Active
                             select cr;
                 var customerRoles = query.ToList();
                 return customerRoles;

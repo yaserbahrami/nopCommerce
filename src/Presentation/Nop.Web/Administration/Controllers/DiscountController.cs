@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 using Nop.Admin.Extensions;
+using Nop.Admin.Helpers;
 using Nop.Admin.Models.Discounts;
 using Nop.Core;
+using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Directory;
 using Nop.Core.Domain.Discounts;
+using Nop.Services;
 using Nop.Services.Catalog;
 using Nop.Services.Directory;
 using Nop.Services.Discounts;
@@ -45,10 +48,11 @@ namespace Nop.Admin.Controllers
         private readonly IVendorService _vendorService;
         private readonly IOrderService _orderService;
         private readonly IPriceFormatter _priceFormatter;
+        private readonly ICacheManager _cacheManager;
 
         #endregion
 
-        #region Constructors
+        #region Ctor
 
         public DiscountController(IDiscountService discountService, 
             ILocalizationService localizationService,
@@ -65,7 +69,8 @@ namespace Nop.Admin.Controllers
             IStoreService storeService,
             IVendorService vendorService,
             IOrderService orderService,
-            IPriceFormatter priceFormatter)
+            IPriceFormatter priceFormatter, 
+            ICacheManager cacheManager)
         {
             this._discountService = discountService;
             this._localizationService = localizationService;
@@ -83,6 +88,7 @@ namespace Nop.Admin.Controllers
             this._vendorService = vendorService;
             this._orderService = orderService;
             this._priceFormatter = priceFormatter;
+            this._cacheManager = cacheManager;
         }
 
         #endregion
@@ -134,6 +140,8 @@ namespace Nop.Admin.Controllers
         }
 
         #endregion
+
+        #region Methods
 
         #region Discounts
 
@@ -465,14 +473,15 @@ namespace Nop.Admin.Controllers
             var model = new DiscountModel.AddProductToDiscountModel();
             //categories
             model.AvailableCategories.Add(new SelectListItem { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0" });
-            var categories = _categoryService.GetAllCategories(showHidden: true);
+            var categories = SelectListHelper.GetCategoryList(_categoryService, _cacheManager, true);
             foreach (var c in categories)
-                model.AvailableCategories.Add(new SelectListItem { Text = c.GetFormattedBreadCrumb(categories), Value = c.Id.ToString() });
+                model.AvailableCategories.Add(c);
 
             //manufacturers
             model.AvailableManufacturers.Add(new SelectListItem { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0" });
-            foreach (var m in _manufacturerService.GetAllManufacturers(showHidden: true))
-                model.AvailableManufacturers.Add(new SelectListItem { Text = m.Name, Value = m.Id.ToString() });
+            var manufacturers = SelectListHelper.GetManufacturerList(_manufacturerService, _cacheManager, true);
+            foreach (var m in manufacturers)
+                model.AvailableManufacturers.Add(m);
 
             //stores
             model.AvailableStores.Add(new SelectListItem { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0" });
@@ -481,8 +490,9 @@ namespace Nop.Admin.Controllers
 
             //vendors
             model.AvailableVendors.Add(new SelectListItem { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0" });
-            foreach (var v in _vendorService.GetAllVendors(showHidden: true))
-                model.AvailableVendors.Add(new SelectListItem { Text = v.Name, Value = v.Id.ToString() });
+            var vendors = SelectListHelper.GetVendorList(_vendorService, _cacheManager, true);
+            foreach (var v in vendors)
+                model.AvailableVendors.Add(v);
 
             //product types
             model.AvailableProductTypes = ProductType.SimpleProduct.ToSelectList(false).ToList();
@@ -827,6 +837,8 @@ namespace Nop.Admin.Controllers
 
             return new NullJsonResult();
         }
+
+        #endregion
 
         #endregion
     }

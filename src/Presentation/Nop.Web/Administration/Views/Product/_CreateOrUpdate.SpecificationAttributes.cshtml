@@ -1,15 +1,18 @@
 ﻿@using Nop.Core.Domain.Catalog
+@using Nop.Services
 @model ProductModel
 
 <div class="panel-group">
+    <p>
+        @T("Admin.Catalog.Products.SpecificationAttributes.Hint")
+    </p>
     @if (Model.Id > 0)
-            {
-                /*hide "add spec" table if no attributes are defined*/
-                if (Model.AddSpecificationAttributeModel.AvailableAttributes.Count > 0)
-                {
+    {
+        /*hide "add spec" table if no attributes are defined*/
+        if (Model.AddSpecificationAttributeModel.AvailableAttributes.Count > 0)
+        {
             <div class="panel panel-default">
                 <div class="panel-body">
-
                     <div id="specificationattributes-grid"></div>
 
                     <script>
@@ -47,8 +50,8 @@
                                                 //ProductId: { editable: false, type: "number" },
                                                 AttributeTypeName: { editable: false, type: "string" },
                                                 AttributeName: { editable: false, type: "string" },
-                                                ValueRaw: { editable: false, type: "string" },
-                                                AllowFiltering: { editable: false, type: "boolean" },
+                                                ValueRaw: { editable: true, type: "string" },
+                                                AllowFiltering: { editable: true, type: "boolean" },
                                                 ShowOnProductPage: { editable: true, type: "boolean" },
                                                 DisplayOrder: { editable: true, type: "number" },
                                                 Id: { editable: false, type: "number" }
@@ -76,7 +79,7 @@
                                     info: false
                                 },
                                 editable: {
-                                    confirmation: false,
+                                    confirmation: "@T("Admin.Common.DeleteConfirmation")",
                                     mode: "inline"
                                 },
                                 scrollable: false,
@@ -93,21 +96,42 @@
                                         field: "ValueRaw",
                                         title: "@T("Admin.Catalog.Products.SpecificationAttributes.Fields.Value")",
                                         width: 200,
-                                        encoded: false
+                                        encoded: false,
+                                        editor: function setDropDownEditor(container, options) {
+                                                    if (options.model.AttributeTypeId == @((int)SpecificationAttributeType.Option)) {
+                                                        var dropDownList = $('<input required data-text-field="Name" data-value-field="Id" data-bind="value:ValueRaw"/>')
+                                                            .appendTo(container).kendoDropDownList().data("kendoDropDownList");
+                                                        $.ajax({
+                                                            type: "GET",
+                                                            url: "@(Url.Action("GetOptionsByAttributeId", "SpecificationAttribute"))",
+                                                            data: { "attributeId": options.model.AttributeId },
+                                                            success: function (data) {
+                                                                var availableOptions = [];
+                                                                $.each(data, function(id, option) {
+                                                                    availableOptions.push({ Id: option.id, Name: option.name });
+                                                                });
+                                                                dropDownList.setDataSource(availableOptions);
+                                                                dropDownList.select(function(item) {
+                                                                    return item.Id === options.model.SpecificationAttributeOptionId;
+                                                                });
+                                                            }
+                                                        });
+                                                    }
+                                                }
                                     }, {
                                         field: "AllowFiltering",
                                         title: "@T("Admin.Catalog.Products.SpecificationAttributes.Fields.AllowFiltering")",
                                         width: 150,
                                         headerAttributes: { style: "text-align:center" },
                                         attributes: { style: "text-align:center" },
-                                        template: '<img src="@Url.Content("~/Administration/Content/images/")active-#=AllowFiltering#.gif" />'
+                                        template: '# if(AllowFiltering) {# <i class="fa fa-check true-icon"></i> #} else {# <i class="fa fa-close false-icon"></i> #} #'
                                     }, {
                                         field: "ShowOnProductPage",
                                         title: "@T("Admin.Catalog.Products.SpecificationAttributes.Fields.ShowOnProductPage")",
                                         width: 150,
                                         headerAttributes: { style: "text-align:center" },
                                         attributes: { style: "text-align:center" },
-                                        template: '<img src="@Url.Content("~/Administration/Content/images/")active-#=ShowOnProductPage#.gif" />'
+                                        template: '# if(ShowOnProductPage) {# <i class="fa fa-check true-icon"></i> #} else {# <i class="fa fa-close false-icon"></i> #} #'
                                     },
                                     {
                                         field: "DisplayOrder",
@@ -131,7 +155,12 @@
                                         ],
                                         width: 200
                                     }
-                                ]
+                                ],
+                                edit: function(e) {
+                                    if (e.model.AttributeTypeId != @((int)SpecificationAttributeType.Option)) {
+                                        e.container.find("input[name=AllowFiltering]").attr("disabled", true);
+                                    }
+                                }
                             });
                         });
                     </script>
@@ -220,7 +249,6 @@
 
                         $(document).ready(function() {
                             $("#@Html.FieldIdFor(model => model.AddSpecificationAttributeModel.AttributeTypeId)").change(toggleAttributeType);
-
                             toggleAttributeType();
                         });
 
@@ -247,74 +275,71 @@
                     </script>
 
                     <div class="form-group">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.AttributeTypeId)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopDropDownListFor(model => model.AddSpecificationAttributeModel.AttributeTypeId, ((SpecificationAttributeType)Model.AddSpecificationAttributeModel.AttributeTypeId).ToSelectList())
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.AttributeTypeId)
                         </div>
                     </div>
                     <div class="form-group">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeId)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopDropDownListFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeId, Model.AddSpecificationAttributeModel.AvailableAttributes)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeId)
                         </div>
                     </div>
                     <div class="form-group" id="pnlSpecificationAttributeOptionId">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeOptionId)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopDropDownListFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeOptionId, Model.AddSpecificationAttributeModel.AvailableOptions)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.SpecificationAttributeOptionId)
                         </div>
                     </div>
                     <div class="form-group" id="pnlCustomValue">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.CustomValue)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopEditorFor(model => model.AddSpecificationAttributeModel.CustomValue)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.CustomValue)
                         </div>
                     </div>
                     <div class="form-group" id="pnlAllowFiltering">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.AllowFiltering)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopEditorFor(model => model.AddSpecificationAttributeModel.AllowFiltering)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.AllowFiltering)
                         </div>
                     </div>
                     <div class="form-group">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.ShowOnProductPage)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopEditorFor(model => model.AddSpecificationAttributeModel.ShowOnProductPage)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.ShowOnProductPage)
                         </div>
                     </div>
                     <div class="form-group">
-                        <div class="col-sm-3">
+                        <div class="col-md-3">
                             @Html.NopLabelFor(model => model.AddSpecificationAttributeModel.DisplayOrder)
                         </div>
-                        <div class="col-sm-9">
+                        <div class="col-md-9">
                             @Html.NopEditorFor(model => model.AddSpecificationAttributeModel.DisplayOrder)
                             @Html.ValidationMessageFor(model => model.AddSpecificationAttributeModel.DisplayOrder)
                         </div>
                     </div>
                     <div class="form-group">
-                        <div class="col-sm-3">
-                            &nbsp;
-                        </div>
-                        <div class="col-sm-9">
-                            <input type="button" id="addProductSpec" class="btn btn-default" value="@T("Admin.Catalog.Products.SpecificationAttributes.AddButton")" />
+                        <div class="col-md-9 col-md-offset-3">
+                            <button type="button" id="addProductSpec" class="btn btn-primary">@T("Admin.Catalog.Products.SpecificationAttributes.AddButton")</button>
                         </div>
                     </div>
                 </div>
@@ -338,4 +363,3 @@
         </div>
     }
 </div>
-

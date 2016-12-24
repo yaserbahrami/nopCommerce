@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Web;
 using Nop.Core;
+using Nop.Core.Domain;
 using Nop.Core.Domain.Blogs;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
@@ -32,8 +33,8 @@ using Nop.Services.Orders;
 using Nop.Services.Payments;
 using Nop.Services.Seo;
 using Nop.Services.Shipping;
+using Nop.Services.Shipping.Tracking;
 using Nop.Services.Stores;
-using Nop.Core.Domain;
 
 namespace Nop.Services.Messages
 {
@@ -52,6 +53,7 @@ namespace Nop.Services.Messages
         private readonly IPaymentService _paymentService;
         private readonly IProductAttributeParser _productAttributeParser;
         private readonly IAddressAttributeFormatter _addressAttributeFormatter;
+        private readonly ICustomerAttributeFormatter _customerAttributeFormatter;
         private readonly IStoreService _storeService;
         private readonly IStoreContext _storeContext;
 
@@ -81,6 +83,7 @@ namespace Nop.Services.Messages
             IStoreContext storeContext,
             IProductAttributeParser productAttributeParser,
             IAddressAttributeFormatter addressAttributeFormatter,
+            ICustomerAttributeFormatter customerAttributeFormatter,
             MessageTemplatesSettings templatesSettings,
             CatalogSettings catalogSettings,
             TaxSettings taxSettings,
@@ -100,6 +103,7 @@ namespace Nop.Services.Messages
             this._paymentService = paymentService;
             this._productAttributeParser = productAttributeParser;
             this._addressAttributeFormatter = addressAttributeFormatter;
+            this._customerAttributeFormatter = customerAttributeFormatter;
             this._storeService = storeService;
             this._storeContext = storeContext;
 
@@ -191,7 +195,7 @@ namespace Nop.Services.Messages
                     sb.AppendLine(rentalInfo);
                 }
                 //sku
-                if (_catalogSettings.ShowProductSku)
+                if (_catalogSettings.ShowSkuOnProductDetailsPage)
                 {
                     var sku = product.FormatSku(orderItem.AttributesXml, _productAttributeParser);
                     if (!String.IsNullOrEmpty(sku))
@@ -347,7 +351,7 @@ namespace Nop.Services.Messages
                         foreach (var tr in order.TaxRatesDictionary)
                             taxRates.Add(tr.Key, _currencyService.ConvertCurrency(tr.Value, order.CurrencyRate));
 
-                        displayTaxRates = _taxSettings.DisplayTaxRates && taxRates.Count > 0;
+                        displayTaxRates = _taxSettings.DisplayTaxRates && taxRates.Any();
                         displayTax = !displayTaxRates;
 
                         var orderTaxInCustomerCurrency = _currencyService.ConvertCurrency(order.OrderTax, order.CurrencyRate);
@@ -497,7 +501,7 @@ namespace Nop.Services.Messages
                     sb.AppendLine(rentalInfo);
                 }
                 //sku
-                if (_catalogSettings.ShowProductSku)
+                if (_catalogSettings.ShowSkuOnProductDetailsPage)
                 {
                     var sku = product.FormatSku(orderItem.AttributesXml, _productAttributeParser);
                     if (!String.IsNullOrEmpty(sku))
@@ -523,16 +527,15 @@ namespace Nop.Services.Messages
         /// Get store URL
         /// </summary>
         /// <param name="storeId">Store identifier; Pass 0 to load URL of the current store</param>
-        /// <param name="useSsl">Use SSL</param>
         /// <returns></returns>
-        protected virtual string GetStoreUrl(int storeId = 0, bool useSsl = false)
+        protected virtual string GetStoreUrl(int storeId = 0)
         {
             var store = _storeService.GetStoreById(storeId) ?? _storeContext.CurrentStore;
 
             if (store == null)
                 throw new Exception("No store could be loaded");
 
-            return useSsl ? store.SecureUrl : store.Url;
+            return store.Url;
         }
 
         #endregion
@@ -661,18 +664,9 @@ namespace Nop.Services.Messages
             {
                 //we cannot inject IShippingService into constructor because it'll cause circular references.
                 //that's why we resolve it here this way
-                var shippingService = EngineContext.Current.Resolve<IShippingService>();
-                var srcm = shippingService.LoadShippingRateComputationMethodBySystemName(shipment.Order.ShippingRateComputationMethodSystemName);
-                if (srcm != null &&
-                    srcm.PluginDescriptor.Installed &&
-                    srcm.IsShippingRateComputationMethodActive(_shippingSettings))
-                {
-                    var shipmentTracker = srcm.ShipmentTracker;
-                    if (shipmentTracker != null)
-                    {
-                        trackingNumberUrl = shipmentTracker.GetUrl(shipment.TrackingNumber);
-                    }
-                }
+                var shipmentTracker = shipment.GetShipmentTracker(EngineContext.Current.Resolve<IShippingService>(), _shippingSettings);
+                if (shipmentTracker != null)
+                    trackingNumberUrl = shipmentTracker.GetUrl(shipment.TrackingNumber);
             }
             tokens.Add(new Token("Shipment.TrackingNumberURL", trackingNumberUrl, true));
             tokens.Add(new Token("Shipment.Product(s)", ProductListToHtmlTable(shipment, languageId), true));
@@ -701,7 +695,7 @@ namespace Nop.Services.Messages
 
         public virtual void AddReturnRequestTokens(IList<Token> tokens, ReturnRequest returnRequest, OrderItem orderItem)
         {
-            tokens.Add(new Token("ReturnRequest.ID", returnRequest.Id.ToString()));
+            tokens.Add(new Token("ReturnRequest.CustomNumber", returnRequest.CustomNumber));
             tokens.Add(new Token("ReturnRequest.OrderId", orderItem.OrderId.ToString()));
             tokens.Add(new Token("ReturnRequest.Product.Quantity", returnRequest.Quantity.ToString()));
             tokens.Add(new Token("ReturnRequest.Product.Name", orderItem.Product.Name));
@@ -743,15 +737,20 @@ namespace Nop.Services.Messages
             tokens.Add(new Token("Customer.VatNumber", customer.GetAttribute<string>(SystemCustomerAttributeNames.VatNumber)));
             tokens.Add(new Token("Customer.VatNumberStatus", ((VatNumberStatus)customer.GetAttribute<int>(SystemCustomerAttributeNames.VatNumberStatusId)).ToString()));
 
+            var customAttributesXml = customer.GetAttribute<string>(SystemCustomerAttributeNames.CustomCustomerAttributes);
+            tokens.Add(new Token("Customer.CustomAttributes", _customerAttributeFormatter.FormatAttributes(customAttributesXml), true));
 
 
             //note: we do not use SEO friendly URLS because we can get errors caused by having .(dot) in the URL (from the email address)
             //TODO add a method for getting URL (use routing because it handles all SEO friendly URLs)
-            string passwordRecoveryUrl = string.Format("{0}passwordrecovery/confirm?token={1}&email={2}", GetStoreUrl(), customer.GetAttribute<string>(SystemCustomerAttributeNames.PasswordRecoveryToken), HttpUtility.UrlEncode(customer.Email));
-            string accountActivationUrl = string.Format("{0}customer/activation?token={1}&email={2}", GetStoreUrl(), customer.GetAttribute<string>(SystemCustomerAttributeNames.AccountActivationToken), HttpUtility.UrlEncode(customer.Email));
+            var passwordRecoveryUrl = string.Format("{0}passwordrecovery/confirm?token={1}&email={2}", GetStoreUrl(), customer.GetAttribute<string>(SystemCustomerAttributeNames.PasswordRecoveryToken), HttpUtility.UrlEncode(customer.Email));
+            var accountActivationUrl = string.Format("{0}customer/activation?token={1}&email={2}", GetStoreUrl(), customer.GetAttribute<string>(SystemCustomerAttributeNames.AccountActivationToken), HttpUtility.UrlEncode(customer.Email));
+            var emailRevalidationUrl = string.Format("{0}customer/revalidateemail?token={1}&email={2}", GetStoreUrl(), customer.GetAttribute<string>(SystemCustomerAttributeNames.EmailRevalidationToken), HttpUtility.UrlEncode(customer.Email));
             var wishlistUrl = string.Format("{0}wishlist/{1}", GetStoreUrl(), customer.CustomerGuid);
+
             tokens.Add(new Token("Customer.PasswordRecoveryURL", passwordRecoveryUrl, true));
             tokens.Add(new Token("Customer.AccountActivationURL", accountActivationUrl, true));
+            tokens.Add(new Token("Customer.EmailRevalidationURL", emailRevalidationUrl, true));
             tokens.Add(new Token("Wishlist.URLForCustomer", wishlistUrl, true));
 
             //event notification
@@ -909,6 +908,9 @@ namespace Nop.Services.Messages
         /// <returns>List of allowed (supported) message tokens for campaigns</returns>
         public virtual string[] GetListOfCampaignAllowedTokens()
         {
+            var additionTokens = new CampaignAdditionTokensAddedEvent();
+            _eventPublisher.Publish(additionTokens);
+
             var allowedTokens = new List<string>
             {
                 "%Store.Name%",
@@ -926,11 +928,15 @@ namespace Nop.Services.Messages
                 "%YouTube.URL%",
                 "%GooglePlus.URL%"
             };
-            return allowedTokens.ToArray();
+            allowedTokens.AddRange(additionTokens.AdditionTokens);
+            return allowedTokens.Distinct().ToArray();
         }
 
         public virtual string[] GetListOfAllowedTokens()
         {
+            var additionTokens = new AdditionTokensAddedEvent();
+            _eventPublisher.Publish(additionTokens);
+
             var allowedTokens = new List<string>
             {
                 "%Store.Name%",
@@ -985,7 +991,7 @@ namespace Nop.Services.Messages
                 "%Shipment.TrackingNumberURL%",
                 "%Shipment.Product(s)%",
                 "%Shipment.URLForCustomer%",
-                "%ReturnRequest.ID%",
+                "%ReturnRequest.CustomNumber%",
                 "%ReturnRequest.OrderId%",
                 "%ReturnRequest.Product.Quantity%",
                 "%ReturnRequest.Product.Name%", 
@@ -1007,9 +1013,11 @@ namespace Nop.Services.Messages
                 "%Customer.FirstName%",
                 "%Customer.LastName%",
                 "%Customer.VatNumber%",
-                "%Customer.VatNumberStatus%", 
-                "%Customer.PasswordRecoveryURL%", 
-                "%Customer.AccountActivationURL%", 
+                "%Customer.VatNumberStatus%",
+                "%Customer.CustomAttributes%",
+                "%Customer.PasswordRecoveryURL%",
+                "%Customer.AccountActivationURL%",
+                "%Customer.EmailRevalidationURL%",
                 "%Vendor.Name%",
                 "%Vendor.Email%",
                 "%Wishlist.URLForCustomer%", 
@@ -1043,9 +1051,11 @@ namespace Nop.Services.Messages
                 "%YouTube.URL%",
                 "%GooglePlus.URL%"
             };
-            return allowedTokens.ToArray();
+            allowedTokens.AddRange(additionTokens.AdditionTokens);
+
+            return allowedTokens.Distinct().ToArray();
         }
-        
+
         #endregion
     }
 }

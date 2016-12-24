@@ -9,9 +9,9 @@ using Nop.Services.Catalog;
 using Nop.Services.Events;
 using Nop.Services.Helpers;
 using Nop.Services.Localization;
+using Nop.Services.Logging;
 using Nop.Services.Security;
 using Nop.Services.Stores;
-using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Kendoui;
 
@@ -27,6 +27,7 @@ namespace Nop.Admin.Controllers
         private readonly IPermissionService _permissionService;
         private readonly IEventPublisher _eventPublisher;
         private readonly IStoreService _storeService;
+        private readonly ICustomerActivityService _customerActivityService;
 
         #endregion Fields
 
@@ -37,7 +38,8 @@ namespace Nop.Admin.Controllers
             ILocalizationService localizationService, 
             IPermissionService permissionService,
             IEventPublisher eventPublisher,
-            IStoreService storeService)
+            IStoreService storeService,
+            ICustomerActivityService customerActivityService)
         {
             this._productService = productService;
             this._dateTimeHelper = dateTimeHelper;
@@ -45,6 +47,7 @@ namespace Nop.Admin.Controllers
             this._permissionService = permissionService;
             this._eventPublisher = eventPublisher;
             _storeService = storeService;
+            this._customerActivityService = customerActivityService;
         }
 
         #endregion
@@ -53,7 +56,7 @@ namespace Nop.Admin.Controllers
 
         [NonAction]
         protected virtual void PrepareProductReviewModel(ProductReviewModel model,
-            ProductReview productReview, bool excludeProperties, bool formatReviewText)
+            ProductReview productReview, bool excludeProperties, bool formatReviewAndReplyText)
         {
             if (model == null)
                 throw new ArgumentNullException("model");
@@ -73,10 +76,16 @@ namespace Nop.Admin.Controllers
             if (!excludeProperties)
             {
                 model.Title = productReview.Title;
-                if (formatReviewText)
+                if (formatReviewAndReplyText)
+                {
                     model.ReviewText = Core.Html.HtmlHelper.FormatText(productReview.ReviewText, false, true, false, false, false, false);
+                    model.ReplyText = Core.Html.HtmlHelper.FormatText(productReview.ReplyText, false, true, false, false, false, false);
+                }
                 else
+                {
                     model.ReviewText = productReview.ReviewText;
+                    model.ReplyText = productReview.ReplyText;
+                }
                 model.IsApproved = productReview.IsApproved;
             }
         }
@@ -117,16 +126,16 @@ namespace Nop.Admin.Controllers
                             : (DateTime?)_dateTimeHelper.ConvertToUtcTime(model.CreatedOnTo.Value, _dateTimeHelper.CurrentTimeZone).AddDays(1);
 
             var productReviews = _productService.GetAllProductReviews(0, null, 
-                createdOnFromValue, createdToFromValue, model.SearchText, model.SearchStoreId, model.SearchProductId);
+                createdOnFromValue, createdToFromValue, model.SearchText, model.SearchStoreId, model.SearchProductId, command.Page - 1, command.PageSize);
             var gridModel = new DataSourceResult
             {
-                Data = productReviews.PagedForCommand(command).Select(x =>
+                Data = productReviews.Select(x =>
                 {
                     var m = new ProductReviewModel();
                     PrepareProductReviewModel(m, x, false, true);
                     return m;
                 }),
-                Total = productReviews.Count,
+                Total = productReviews.TotalCount
             };
 
             return Json(gridModel);
@@ -161,16 +170,27 @@ namespace Nop.Admin.Controllers
 
             if (ModelState.IsValid)
             {
+                var previousIsApproved = productReview.IsApproved;
+
                 productReview.Title = model.Title;
                 productReview.ReviewText = model.ReviewText;
+                productReview.ReplyText = model.ReplyText;
                 productReview.IsApproved = model.IsApproved;
                 _productService.UpdateProduct(productReview.Product);
-                
+
+                //activity log
+                _customerActivityService.InsertActivity("EditProductReview", _localizationService.GetResource("ActivityLog.EditProductReview"), productReview.Id);
+
                 //update product totals
                 _productService.UpdateProductReviewTotals(productReview.Product);
 
+                //raise event (only if it wasn't approved before and is approved now)
+                if (!previousIsApproved && productReview.IsApproved)
+                    _eventPublisher.Publish(new ProductReviewApprovedEvent(productReview));
+
                 SuccessNotification(_localizationService.GetResource("Admin.Catalog.ProductReviews.Updated"));
-                return continueEditing ? RedirectToAction("Edit", new { id = productReview.Id}) : RedirectToAction("List");
+
+                return continueEditing ? RedirectToAction("Edit", new { id = productReview.Id }) : RedirectToAction("List");
             }
 
 
@@ -178,7 +198,7 @@ namespace Nop.Admin.Controllers
             PrepareProductReviewModel(model, productReview, true, false);
             return View(model);
         }
-        
+
         //delete
         [HttpPost]
         public ActionResult Delete(int id)
@@ -193,6 +213,10 @@ namespace Nop.Admin.Controllers
 
             var product = productReview.Product;
             _productService.DeleteProductReview(productReview);
+
+            //activity log
+            _customerActivityService.InsertActivity("DeleteProductReview", _localizationService.GetResource("ActivityLog.DeleteProductReview"), productReview.Id);
+
             //update product totals
             _productService.UpdateProductReviewTotals(product);
 
@@ -208,19 +232,18 @@ namespace Nop.Admin.Controllers
 
             if (selectedIds != null)
             {
-                var productReviews = _productService.GetProducReviewsByIds(selectedIds.ToArray());
+                //filter not approved reviews
+                var productReviews = _productService.GetProducReviewsByIds(selectedIds.ToArray()).Where(review => !review.IsApproved);
                 foreach (var productReview in productReviews)
                 {
-                    var previousIsApproved = productReview.IsApproved;
                     productReview.IsApproved = true;
                     _productService.UpdateProduct(productReview.Product);
+                    
                     //update product totals
                     _productService.UpdateProductReviewTotals(productReview.Product);
 
-
-                    //raise event (only if it wasn't approved before)
-                    if (!previousIsApproved)
-                        _eventPublisher.Publish(new ProductReviewApprovedEvent(productReview));
+                    //raise event 
+                    _eventPublisher.Publish(new ProductReviewApprovedEvent(productReview));
                 }
             }
 
@@ -235,11 +258,13 @@ namespace Nop.Admin.Controllers
 
             if (selectedIds != null)
             {
-                var productReviews = _productService.GetProducReviewsByIds(selectedIds.ToArray());
+                //filter approved reviews
+                var productReviews = _productService.GetProducReviewsByIds(selectedIds.ToArray()).Where(review => review.IsApproved);
                 foreach (var productReview in productReviews)
                 {
                     productReview.IsApproved = false;
                     _productService.UpdateProduct(productReview.Product);
+
                     //update product totals
                     _productService.UpdateProductReviewTotals(productReview.Product);
                 }

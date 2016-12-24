@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Web;
@@ -114,6 +115,52 @@ namespace Nop.Admin.Controllers
 
         #endregion
 
+        #region Utitlies
+
+        private bool IsDebugAssembly(Assembly assembly)
+        {
+            var attribs = assembly.GetCustomAttributes(typeof(System.Diagnostics.DebuggableAttribute), false);
+
+            if (attribs.Length > 0)
+            {
+                var attr = attribs[0] as System.Diagnostics.DebuggableAttribute;
+                if (attr != null)
+                {
+                    return attr.IsJITOptimizerDisabled;
+                }
+            }
+
+            return false;
+        }
+
+        private DateTime GetBuildDate(Assembly assembly, TimeZoneInfo target = null)
+        {
+            var filePath = assembly.Location;
+
+            const int cPeHeaderOffset = 60;
+            const int cLinkerTimestampOffset = 8;
+
+            var buffer = new byte[2048];
+
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                stream.Read(buffer, 0, 2048);
+            }
+
+            var offset = BitConverter.ToInt32(buffer, cPeHeaderOffset);
+            var secondsSince1970 = BitConverter.ToInt32(buffer, offset + cLinkerTimestampOffset);
+            var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            var linkTimeUtc = epoch.AddSeconds(secondsSince1970);
+
+            var tz = target ?? TimeZoneInfo.Local;
+            var localTime = TimeZoneInfo.ConvertTimeFromUtc(linkTimeUtc, tz);
+
+            return localTime;
+        }
+
+        #endregion
+
         #region Methods
 
         public ActionResult SystemInfo()
@@ -141,9 +188,12 @@ namespace Nop.Admin.Controllers
             model.ServerTimeZone = TimeZone.CurrentTimeZone.StandardName;
             model.ServerLocalTime = DateTime.Now;
             model.UtcTime = DateTime.UtcNow;
+            model.CurrentUserTime = _dateTimeHelper.ConvertToUserTime(DateTime.Now);
             model.HttpHost = _webHelper.ServerVariables("HTTP_HOST");
             foreach (var key in _httpContext.Request.ServerVariables.AllKeys)
             {
+                if (key.StartsWith("ALL_")) continue;
+
                 model.ServerVariables.Add(new SystemInfoModel.ServerVariableModel
                 {
                     Name = key,
@@ -151,18 +201,30 @@ namespace Nop.Admin.Controllers
                 });
             }
             //Environment.GetEnvironmentVariable("USERNAME");
+
+            var trustLevel = CommonHelper.GetTrustLevel();
+
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                model.LoadedAssemblies.Add(new SystemInfoModel.LoadedAssembly
+                var loadedAssembly = new SystemInfoModel.LoadedAssembly
                 {
                     FullName = assembly.FullName,
-                    //we cannot use Location property in medium trust
-                    //Location = assembly.Location
-                });
+                   
+                };
+                //ensure no exception is thrown
+                try
+                {
+                    var canGetLocation = trustLevel >= AspNetHostingPermissionLevel.High && !assembly.IsDynamic;
+                    loadedAssembly.Location = canGetLocation ? assembly.Location : null;
+                    loadedAssembly.IsDebug = IsDebugAssembly(assembly);
+                    loadedAssembly.BuildDate = canGetLocation ? (DateTime?)GetBuildDate(assembly, TimeZoneInfo.Local) : null;
+                }
+                catch (Exception) { }
+                model.LoadedAssemblies.Add(loadedAssembly);
             }
+
             return View(model);
         }
-
 
         public ActionResult Warnings()
         {
@@ -297,7 +359,7 @@ namespace Nop.Admin.Controllers
 
             //shipping rate coputation methods
             var srcMethods = _shippingService.LoadActiveShippingRateComputationMethods();
-            if (srcMethods.Count == 0)
+            if (!srcMethods.Any())
                 model.Add(new SystemWarningModel
                 {
                     Level = SystemWarningLevel.Fail,
@@ -519,7 +581,7 @@ namespace Nop.Admin.Controllers
             {
                 Data = backupFiles.Select(p=>new {p.Name,
                     Length = string.Format("{0:F2} Mb", p.Length / 1024f / 1024f),
-                    Link = _webHelper.GetStoreLocation(false) + "Administration/backups/"+p.Name
+                    Link = _webHelper.GetStoreLocation(false) + "Administration/db_backups/" + p.Name
                 }),
                 Total = backupFiles.Count
             };
@@ -612,7 +674,7 @@ namespace Nop.Admin.Controllers
             return Redirect(returnUrl);
         }
 
-
+        [HttpPost]
         public ActionResult ClearCache(string returnUrl = "")
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageMaintenance))
@@ -630,7 +692,7 @@ namespace Nop.Admin.Controllers
             return Redirect(returnUrl);
         }
 
-
+        [HttpPost]
         public ActionResult RestartApplication(string returnUrl = "")
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageMaintenance))
@@ -819,6 +881,23 @@ namespace Nop.Admin.Controllers
                 return Content("");
 
             return PartialView();
+        }
+
+        //action displaying notification (warning) to a store owner that entered SE URL already exists
+        [ValidateInput(false)]
+        public ActionResult UrlReservedWarning(string entityId, string entityName, string seName)
+        {
+            if (string.IsNullOrEmpty(seName))
+                return Json(new { Result = string.Empty }, JsonRequestBehavior.AllowGet);
+
+            int parsedEntityId;
+            int.TryParse(entityId, out parsedEntityId);
+            var validatedSeName = SeoExtensions.ValidateSeName(parsedEntityId, entityName, seName, null, false);
+
+            if (seName.Equals(validatedSeName, StringComparison.InvariantCultureIgnoreCase))
+                return Json(new { Result = string.Empty }, JsonRequestBehavior.AllowGet);
+
+            return Json(new { Result = string.Format(_localizationService.GetResource("Admin.System.Warnings.URL.Reserved"), validatedSeName) }, JsonRequestBehavior.AllowGet);
         }
 
         #endregion

@@ -46,6 +46,11 @@ namespace Nop.Web.Infrastructure
                             "cart/",
                             new { controller = "ShoppingCart", action = "Cart" },
                             new[] { "Nop.Web.Controllers" });
+            //estimate shipping
+            routes.MapLocalizedRoute("EstimateShipping",
+                            "cart/estimateshipping",
+                            new {controller = "ShoppingCart", action = "GetEstimateShipping"},
+                            new[] {"Nop.Web.Controllers"});
             //wishlist
             routes.MapLocalizedRoute("Wishlist",
                             "wishlist/{customerGuid}",
@@ -193,10 +198,24 @@ namespace Nop.Web.Infrastructure
                             "productreviews/{productId}",
                             new { controller = "Product", action = "ProductReviews" },
                             new[] { "Nop.Web.Controllers" });
+            routes.MapLocalizedRoute("CustomerProductReviews",
+                            "customer/productreviews",
+                            new { controller = "Product", action = "CustomerProductReviews" },
+                            new[] { "Nop.Web.Controllers" });
+            routes.MapLocalizedRoute("CustomerProductReviewsPaged",
+                            "customer/productreviews/page/{page}",
+                            new { controller = "Product", action = "CustomerProductReviews" },
+                            new { page = @"\d+" },
+                            new[] { "Nop.Web.Controllers" });
             //back in stock notifications
             routes.MapLocalizedRoute("BackInStockSubscribePopup",
                             "backinstocksubscribe/{productId}",
                             new { controller = "BackInStockSubscription", action = "SubscribePopup" },
+                            new { productId = @"\d+" },
+                            new[] { "Nop.Web.Controllers" });
+            routes.MapLocalizedRoute("BackInStockSubscribeSend",
+                            "backinstocksubscribesend/{productId}",
+                            new { controller = "BackInStockSubscription", action = "SubscribePopupPOST" },
                             new { productId = @"\d+" },
                             new[] { "Nop.Web.Controllers" });
             //downloads
@@ -369,6 +388,10 @@ namespace Nop.Web.Infrastructure
                             "customer/activation",
                             new { controller = "Customer", action = "AccountActivation" },
                             new[] { "Nop.Web.Controllers" });
+            routes.MapLocalizedRoute("EmailRevalidation",
+                            "customer/revalidateemail",
+                            new { controller = "Customer", action = "EmailRevalidation" },
+                            new[] { "Nop.Web.Controllers" });
             routes.MapLocalizedRoute("CustomerForumSubscriptions",
                             "boards/forumsubscriptions",
                             new { controller = "Boards", action = "CustomerForumSubscriptions" },
@@ -459,6 +482,11 @@ namespace Nop.Web.Infrastructure
                             "vendor/apply",
                             new { controller = "Vendor", action = "ApplyVendor" },
                             new[] { "Nop.Web.Controllers" });
+            //vendor info
+            routes.MapLocalizedRoute("CustomerVendorInfo",
+                            "customer/vendorinfo",
+                            new { controller = "Vendor", action = "Info" },
+                            new[] { "Nop.Web.Controllers" });
 
             //poll vote AJAX link
             routes.MapLocalizedRoute("PollVote",
@@ -512,7 +540,12 @@ namespace Nop.Web.Infrastructure
                             new { controller = "ShoppingCart", action = "UploadFileCheckoutAttribute" },
                             new { attributeId = @"\d+" },
                             new[] { "Nop.Web.Controllers" });
-            
+            //return request with "upload file" tsupport
+            routes.MapLocalizedRoute("UploadFileReturnRequest",
+                            "uploadfilereturnrequest",
+                            new { controller = "ReturnRequest", action = "UploadFileReturnRequest" },
+                            new[] { "Nop.Web.Controllers" });
+
             //forums
             routes.MapLocalizedRoute("ActiveDiscussions",
                             "boards/activediscussions",

@@ -47,7 +47,7 @@ namespace Nop.Data.Tests.Orders
                 OrderDiscount = 11.1M,
                 OrderTotal = 12.1M,
                 RefundedAmount  = 13.1M,
-                RewardPointsWereAdded = true,
+                RewardPointsHistoryEntryId = 1,
                 CheckoutAttributeDescription = "CheckoutAttributeDescription1",
                 CheckoutAttributesXml = "CheckoutAttributesXml1",
                 CustomerLanguageId = 14,
@@ -69,6 +69,7 @@ namespace Nop.Data.Tests.Orders
                 PaidDateUtc= new DateTime(2010, 01, 01),
                 BillingAddress = GetTestBillingAddress(),
                 ShippingAddress = null,
+                PickupAddress = GetTestPickupAddress(),
                 ShippingMethod = "ShippingMethod1",
                 ShippingRateComputationMethodSystemName = "ShippingRateComputationMethodSystemName1",
                 PickUpInStore = true,
@@ -102,7 +103,7 @@ namespace Nop.Data.Tests.Orders
             fromDb.OrderDiscount.ShouldEqual(11.1M);
             fromDb.OrderTotal.ShouldEqual(12.1M);
             fromDb.RefundedAmount.ShouldEqual(13.1M);
-            fromDb.RewardPointsWereAdded.ShouldEqual(true);
+            fromDb.RewardPointsHistoryEntryId.ShouldEqual(1);
             fromDb.CheckoutAttributeDescription.ShouldEqual("CheckoutAttributeDescription1");
             fromDb.CheckoutAttributesXml.ShouldEqual("CheckoutAttributesXml1");
             fromDb.CustomerLanguageId.ShouldEqual(14);
@@ -125,6 +126,8 @@ namespace Nop.Data.Tests.Orders
             fromDb.BillingAddress.ShouldNotBeNull();
             fromDb.BillingAddress.FirstName.ShouldEqual("FirstName 1");
             fromDb.ShippingAddress.ShouldBeNull();
+            fromDb.PickupAddress.ShouldNotBeNull();
+            fromDb.PickupAddress.LastName.ShouldEqual("LastName 3");
             fromDb.ShippingMethod.ShouldEqual("ShippingMethod1");
             fromDb.ShippingRateComputationMethodSystemName.ShouldEqual("ShippingRateComputationMethodSystemName1");
             fromDb.PickUpInStore.ShouldEqual(true);
@@ -393,7 +396,26 @@ namespace Nop.Data.Tests.Orders
                 Country = GetTestCountry()
             };
         }
-        
+
+        protected Address GetTestPickupAddress()
+        {
+            return new Address
+            {
+                FirstName = "FirstName 3",
+                LastName = "LastName 3",
+                Email = "Email 3",
+                Company = "Company 3",
+                City = "City 3",
+                Address1 = "Address3a",
+                Address2 = "Address3b",
+                ZipPostalCode = "ZipPostalCode 3",
+                PhoneNumber = "PhoneNumber 3",
+                FaxNumber = "FaxNumber 3",
+                CreatedOnUtc = new DateTime(2010, 01, 01),
+                Country = GetTestCountry()
+            };
+        }
+
         protected Country GetTestCountry()
         {
             return new Country

@@ -4,7 +4,10 @@
 
     //page title
     ViewBag.Title = T("Admin.Catalog.ProductTags").Text;
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Product tags");
 }
+
 @using (Html.BeginForm(null, null, FormMethod.Post, new {id = "product-tags-form"}))
 {
     @Html.AntiForgeryToken()
@@ -77,7 +80,7 @@
                                     pageSizes: [@(gridPageSizes)]
                                 },
                                 editable: {
-                                    confirmation: false,
+                                    confirmation: "@T("Admin.Common.DeleteConfirmation")",
                                     mode: "inline"
                                 },
                                 scrollable: false,

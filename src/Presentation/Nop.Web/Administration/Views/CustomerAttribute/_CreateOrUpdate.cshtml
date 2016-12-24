@@ -1,12 +1,16 @@
 ﻿@model CustomerAttributeModel
+
 @using Nop.Core.Domain.Catalog;
+@using Nop.Services
 @Html.ValidationSummary(false)
 @Html.HiddenFor(model => model.Id)
+
 <script>
-    $(document).ready(function() {
+    $(document).ready(function () {
         bindBootstrapTabSelectEvent('customerattribute-edit');
     });
 </script>
+
 <div class="content">
     <div class="form-horizontal">
         <div id="customerattribute-edit" class="nav-tabs-custom">
@@ -37,54 +41,74 @@
 
 @helper TabInfo()
 {
-    <div class="panel-group">
-        <div class="panel panel-default no-border">
-            @(Html.LocalizedEditor<CustomerAttributeModel, CustomerAttributeLocalizedModel>("customerattribute-localized",
-            @<div class="panel-body">
-                <div class="form-group">
-                    <div class="col-sm-3">
-                        @Html.NopLabelFor(model => model.Locales[item].Name)
-                    </div>
-                    <div class="col-sm-9">
-                        @Html.NopEditorFor(model => model.Locales[item].Name)
-                        @Html.ValidationMessageFor(model => model.Locales[item].Name)
-                    </div>
-                </div>
-                <div>
-                    @Html.HiddenFor(model => model.Locales[item].LanguageId)
-                </div>
-            </div>
-    ,
-            @<div class="panel-body">
-                <div class="form-group">
-                    <div class="col-sm-3">
-                        @Html.NopLabelFor(model => model.Name)
-                    </div>
-                    <div class="col-sm-9">
-                        @Html.NopEditorFor(model => model.Name)
-                        @Html.ValidationMessageFor(model => model.Name)
-                    </div>
-                </div>
-            </div>
-                  ))
-        </div>
+    <script type="text/javascript">
+        $(document).ready(function() {
 
+            $("#@Html.FieldIdFor(model => model.AttributeControlTypeId)").change(toggleAttributeControlType);
+
+            toggleAttributeControlType();
+        });
+
+        function toggleAttributeControlType() {
+            var selectedAttributeControlTypeId = $("#@Html.FieldIdFor(model => model.AttributeControlTypeId)").val();
+           
+            //values
+            if (selectedAttributeControlTypeId == @(((int) AttributeControlType.DropdownList).ToString()) ||
+                selectedAttributeControlTypeId == @(((int) AttributeControlType.RadioList).ToString()) ||
+                selectedAttributeControlTypeId == @(((int) AttributeControlType.Checkboxes).ToString()) ||
+                selectedAttributeControlTypeId == @(((int) AttributeControlType.ColorSquares).ToString()) ||
+                selectedAttributeControlTypeId == @(((int) AttributeControlType.ImageSquares).ToString()) ||
+                selectedAttributeControlTypeId == @(((int) AttributeControlType.ReadonlyCheckboxes).ToString())) {
+                 $('[data-tab-name=tab-values]').show();
+            } else {
+                $('[data-tab-name=tab-values]').hide();
+            }
+        }
+    </script>
+
+    <div class="panel-group">
         <div class="panel panel-default">
             <div class="panel-body">
+                @(Html.LocalizedEditor<CustomerAttributeModel, CustomerAttributeLocalizedModel>("customerattribute-localized",
+                @<div>
+                    <div class="form-group">
+                        <div class="col-md-3">
+                            @Html.NopLabelFor(model => model.Locales[item].Name)
+                        </div>
+                        <div class="col-md-9">
+                            @Html.NopEditorFor(model => model.Locales[item].Name)
+                            @Html.ValidationMessageFor(model => model.Locales[item].Name)
+                        </div>
+                    </div>
+                    @Html.HiddenFor(model => model.Locales[item].LanguageId)
+                </div>
+    ,
+                @<div>
+                    <div class="form-group">
+                        <div class="col-md-3">
+                            @Html.NopLabelFor(model => model.Name)
+                        </div>
+                        <div class="col-md-9">
+                            @Html.NopEditorFor(model => model.Name)
+                            @Html.ValidationMessageFor(model => model.Name)
+                        </div>
+                    </div>
+                </div>
+            ))
                 <div class="form-group">
-                    <div class="col-sm-3">
+                    <div class="col-md-3">
                         @Html.NopLabelFor(model => model.IsRequired)
                     </div>
-                    <div class="col-sm-9">
+                    <div class="col-md-9">
                         @Html.NopEditorFor(model => model.IsRequired)
                         @Html.ValidationMessageFor(model => model.IsRequired)
                     </div>
                 </div>
                 <div class="form-group">
-                    <div class="col-sm-3">
+                    <div class="col-md-3">
                         @Html.NopLabelFor(model => model.AttributeControlTypeId)
                     </div>
-                    <div class="col-sm-9">
+                    <div class="col-md-9">
                         @{
                             var attributeControlTypes = ((AttributeControlType)Model.AttributeControlTypeId)
                                 .ToSelectList(valuesToExclude:
@@ -96,10 +120,10 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <div class="col-sm-3">
+                    <div class="col-md-3">
                         @Html.NopLabelFor(model => model.DisplayOrder)
                     </div>
-                    <div class="col-sm-9">
+                    <div class="col-md-9">
                         @Html.NopEditorFor(model => model.DisplayOrder)
                         @Html.ValidationMessageFor(model => model.DisplayOrder)
                     </div>
@@ -108,6 +132,7 @@
         </div>
     </div>
 }
+
 @helper TabValues()
 {
     <div class="panel-group">
@@ -162,7 +187,7 @@
                                     info: false
                                 },
                                 editable: {
-                                    confirmation: false,
+                                    confirmation: "@T("Admin.Common.DeleteConfirmation")",
                                     mode: "inline"
                                 },
                                 scrollable: false,
@@ -175,7 +200,7 @@
                                     width: 100,
                                     headerAttributes: { style: "text-align:center" },
                                     attributes: { style: "text-align:center" },
-                                    template: '<img src="@Url.Content("~/Administration/Content/images/")active-#=IsPreSelected#.gif" />'
+                                    template: '# if(IsPreSelected) {# <i class="fa fa-check true-icon"></i> #} else {# <i class="fa fa-close false-icon"></i> #} #'
                                 }, {
                                     field: "DisplayOrder",
                                     title: "@T("Admin.Customers.CustomerAttributes.Values.Fields.DisplayOrder")",
@@ -195,7 +220,9 @@
                     </script>
                 </div>
                 <div class="panel-footer">
-                    <input type="submit" id="btnAddNewValue" value="@T("Admin.Customers.CustomerAttributes.Values.AddNew")" onclick="javascript:OpenWindow('@(Url.Action("ValueCreatePopup", "CustomerAttribute", new { customerAttributeId = Model.Id, btnId = "btnRefresh", formId = "customerattribute-form" }))', 800, 400, true); return false;" class="btn btn-default" />
+                    <button type="submit" id="btnAddNewValue" onclick="javascript:OpenWindow('@(Url.Action("ValueCreatePopup", "CustomerAttribute", new {customerAttributeId = Model.Id, btnId = "btnRefresh", formId = "customerattribute-form"}))', 800, 400, true); return false;" class="btn btn-primary">
+                        @T("Admin.Customers.CustomerAttributes.Values.AddNew")
+                    </button>
                     <input type="submit" id="btnRefresh" style="display: none" />
                     <script type="text/javascript">
                         $(document).ready(function () {

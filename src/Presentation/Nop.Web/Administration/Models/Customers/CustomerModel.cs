@@ -18,7 +18,10 @@ namespace Nop.Admin.Models.Customers
             this.AvailableTimeZones = new List<SelectListItem>();
             this.SendEmail = new SendEmailModel() { SendImmediately = true };
             this.SendPm = new SendPmModel();
-            this.AvailableCustomerRoles = new List<CustomerRoleModel>();
+
+            this.SelectedCustomerRoleIds= new List<int>();
+            this.AvailableCustomerRoles = new List<SelectListItem>();
+
             this.AssociatedExternalAuthRecords = new List<AssociatedExternalAuthModel>();
             this.AvailableCountries = new List<SelectListItem>();
             this.AvailableStates = new List<SelectListItem>();
@@ -27,8 +30,7 @@ namespace Nop.Admin.Models.Customers
             this.AvailableNewsletterSubscriptionStores = new List<StoreModel>();
             this.RewardPointsAvailableStores = new List<SelectListItem>();
         }
-
-        public bool AllowUsersToChangeUsernames { get; set; }
+       
         public bool UsernamesEnabled { get; set; }
 
         [NopResourceDisplayName("Admin.Customers.Customers.Fields.Username")]
@@ -179,8 +181,10 @@ namespace Nop.Admin.Models.Customers
         //customer roles
         [NopResourceDisplayName("Admin.Customers.Customers.Fields.CustomerRoles")]
         public string CustomerRoleNames { get; set; }
-        public List<CustomerRoleModel> AvailableCustomerRoles { get; set; }
-        public int[] SelectedCustomerRoleIds { get; set; }
+        public List<SelectListItem> AvailableCustomerRoles { get; set; }
+        [NopResourceDisplayName("Admin.Customers.Customers.Fields.CustomerRoles")]
+        [UIHint("MultiSelect")]
+        public IList<int> SelectedCustomerRoleIds { get; set; }
 
 
         //newsletter subscriptions (per store)
@@ -246,7 +250,7 @@ namespace Nop.Admin.Models.Customers
             public int Points { get; set; }
 
             [NopResourceDisplayName("Admin.Customers.Customers.RewardPoints.Fields.PointsBalance")]
-            public int PointsBalance { get; set; }
+            public string PointsBalance { get; set; }
 
             [NopResourceDisplayName("Admin.Customers.Customers.RewardPoints.Fields.Message")]
             [AllowHtml]
@@ -290,6 +294,8 @@ namespace Nop.Admin.Models.Customers
 
             [NopResourceDisplayName("Admin.Customers.Customers.Orders.OrderStatus")]
             public string OrderStatus { get; set; }
+            [NopResourceDisplayName("Admin.Customers.Customers.Orders.OrderStatus")]
+            public int OrderStatusId { get; set; }
 
             [NopResourceDisplayName("Admin.Customers.Customers.Orders.PaymentStatus")]
             public string PaymentStatus { get; set; }

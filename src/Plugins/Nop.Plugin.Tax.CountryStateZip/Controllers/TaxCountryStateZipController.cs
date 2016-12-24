@@ -54,7 +54,7 @@ namespace Nop.Plugin.Tax.CountryStateZip.Controllers
         public ActionResult Configure()
         {
             var taxCategories = _taxCategoryService.GetAllTaxCategories();
-            if (taxCategories.Count == 0)
+            if (!taxCategories.Any())
                 return Content("No tax categories can be loaded");
 
             var model = new TaxRateListModel();
@@ -80,7 +80,7 @@ namespace Nop.Plugin.Tax.CountryStateZip.Controllers
                     model.AvailableStates.Add(new SelectListItem { Text = s.Name, Value = s.Id.ToString() });
             }
 
-            return View("~/Plugins/Tax.CountryStateZip/Views/TaxCountryStateZip/Configure.cshtml", model);
+            return View("~/Plugins/Tax.CountryStateZip/Views/Configure.cshtml", model);
         }
 
         [HttpPost]
